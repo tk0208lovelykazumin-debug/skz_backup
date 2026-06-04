@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <link rel="icon" href="./favicon.png" type="image/png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Sakurazaka46 MSG backup</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="櫻坂MSG庫">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="apple-touch-icon" href="https://sakurazaka46.com/files/14/s46/img/about/about-logo.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sakura: '#da82a1',     
+                        chatbg: '#f6f6f6',     
+                        appbg: '#ffffff',      
+                    },
+                    fontFamily: {
+                        sans: ['"Noto Sans JP"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+        // 🔒 真・軍規級解碼邏輯
+        // 注意：這裡「完全沒有」寫上你的密碼，密碼只存在你的腦袋裡！
+
+        function unlockDatabase(password) {
+            try {
+                // 1. 把輸入的文字，轉換成開鎖用的金鑰
+                const key = CryptoJS.SHA256(password);
+                
+                // 2. 讀取 Python 加密過的亂碼
+                const ciphertextWords = CryptoJS.enc.Base64.parse(ENCRYPTED_DB);
+                
+                // 3. 把前 16 bytes 拆出來當作 IV (擾亂碼)
+                const iv = CryptoJS.lib.WordArray.create(ciphertextWords.words.slice(0, 4));
+                // 4. 剩下的才是真正的鎖死內容
+                const ciphertext = CryptoJS.lib.WordArray.create(ciphertextWords.words.slice(4), ciphertextWords.sigBytes - 16);
+                
+                // 5. 暴力開鎖！
+                const decrypted = CryptoJS.AES.decrypt({ ciphertext: ciphertext }, key, {
+                    iv: iv,
+                    mode: CryptoJS.mode.CBC,
+                    padding: CryptoJS.pad.Pkcs7
+                });
+                
+                // 6. 把解碼後的內容轉回文字 (如果密碼錯了，這裡會直接失敗)
+                const decryptedStr = decrypted.toString(CryptoJS.enc.Utf8);
+                if (!decryptedStr) throw new Error("密碼錯誤，解不開保險箱");
+                
+                // 7. 成功解鎖！把資料塞進網站大腦
+                window.MESSAGES_DB = new Function("return " + decryptedStr)();
+                return true; 
+            } catch(e) {
+                console.error("解鎖失敗，可能是密碼錯誤！");
+                return false; 
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const pwdScreen = document.getElementById('password-screen');
+            // 如果之前成功開過鎖，瀏覽器會記住那把「鑰匙」
+            const savedKey = localStorage.getItem('saved_secret_key');
+            if (savedKey) {
+                if (unlockDatabase(savedKey)) {
+                    pwdScreen.style.display = 'none';
+                    // 🌟 這裡記得呼叫你的畫面初始化函數！
+                    // 例如：renderCalendar(2026, 5); 或載入首頁列表
+                } else {
+                    // 如果鑰匙錯了 (可能密碼被你改了)，就清空它要求重填
+                    localStorage.removeItem('saved_secret_key');
+                }
+            }
+        });
+
+        function checkPassword() {
+            const input = document.getElementById('pwd-input').value;
+            const errorMsg = document.getElementById('pwd-error');
+            const pwdScreen = document.getElementById('password-screen');
+
+            // 直接拿輸入的文字去試開保險箱
+            if (unlockDatabase(input)) {
+                // 開鎖成功：把正確的鑰匙存進瀏覽器，下次就不用打
+                localStorage.setItem('saved_secret_key', input);
+                errorMsg.classList.add('hidden');
+                
+                // 🌟 這裡記得呼叫你的畫面初始化函數！
+                // 例如：renderCalendar(2026, 5);
+
+                pwdScreen.classList.add('opacity-0');
+                setTimeout(() => pwdScreen.style.display = 'none', 500);
+            } else {
+                // 鑰匙插錯了，鎖頭無動於衷
+                errorMsg.classList.remove('hidden');
+                document.getElementById('pwd-input').value = '';
+            }
+        }
+
+        document.getElementById('pwd-input')?.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') checkPassword();
+        });
+    </script>
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        /* 1. 限制每一列訊息的最大寬度，絕對不可超過螢幕 */
+        .message-item {
+            width: 100%;
+            max-width: 100vw;
+            /* 隱藏任何試圖超出這列的隱形元素 */
+            overflow: hidden; 
+        }
+
+        /* 2. 限制對話泡泡的極限寬度 (螢幕寬度 扣掉 頭像和間距) */
+        .message-item .bg-chatbg,
+        /* 🍏 專屬 iPhone 的瀏海防撞機制 */
+        header {
+            /* 讓標題列上方自動長出跟瀏海一樣高的空間，再加上原本的內距，確保文字絕不被遮擋 */
+            padding-top: max(env(safe-area-inset-top), 20px) !important;
+            min-height: calc(env(safe-area-inset-top) + 50px);
+        }
+        .message-item .bg-white {
+            max-width: calc(100vw - 4.5rem);
+            /* 遇到超長網址或連續英文，不准撐大泡泡，強制切斷換行！ */
+            word-wrap: break-word;
+            word-break: break-all;
+        }
+
+        /* 3. 強制所有成員傳的照片、影片，最大只能跟泡泡一樣寬 */
+        .message-item img:not(.rounded-full), 
+        .message-item video {
+            max-width: 100% !important;
+            height: auto !important;
+            object-fit: contain;
+        }
+        .screen-transition { transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease; }
+        .slide-out-left { transform: translateX(-30%); opacity: 0; pointer-events: none; }
+        .slide-in-right { transform: translateX(100%); opacity: 0; pointer-events: none; }
+        .active-screen { transform: translateX(0); opacity: 1; pointer-events: auto; }
+        /* 強制鎖死左右滑動，防止畫面亂晃 */
+        html, body {
+            overflow-x: hidden;
+            width: 100%;
+            max-width: 100vw;
+            position: relative;
+            
+        }
+        /* ==========================================
+           🌟 新增：媒體櫃九宮格介面 (核心！)
+           ========================================== */
+        
+        /* ==========================================
+           🌟 全新媒體庫專用樣式
+           ========================================== */
+        /* 月份標題列 */
+        .month-header {
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+            margin-top: 16px;
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+        }
+
+        /* 圖片與影片的完美九宮格 */
+        .media-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr); /* 截圖是 4 排，我們就做 4 排！ */
+            gap: 4px;
+            margin-bottom: 24px;
+        }
+
+        .media-grid-item {
+            aspect-ratio: 1;
+            border-radius: 4px;
+            overflow: hidden;
+            background-color: #f4f5f7;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .media-grid-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* 影片右上角的秒數/標籤底色 */
+        .video-duration-badge {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            font-size: 10px;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+
+        /* 語音列表項目 */
+        .audio-list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 0;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+        }
+        
+        .audio-list-item:active { background-color: #fafafa; }
+        /* ==========================================
+           🌟 新增：全螢幕媒體檢視器 (大圖介面)
+           ========================================== */
+        #media-modal {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 999; /* 超高，壓過一切 */
+            display: none; /* 預設隱藏 */
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 20px;
+        }
+
+        #media-modal.active { display: flex; } /* 啟用時變 flex */
+
+        #modal-media-content {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain; /* 放大圖顯示全貌，不要裁切 */
+            border-radius: 8px;
+        }
+
+        #modal-close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 32px;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex justify-center h-[100dvh] overflow-hidden font-sans">
+    
+    <!-- 👇 把它貼在 body 的正下方 👇 -->
+    <!-- 🔒 全螢幕密碼門 -->
+    <div id="password-screen" class="fixed inset-0 bg-pink-50 z-[100] flex flex-col items-center justify-center transition-opacity duration-500">
+        <div class="bg-white p-8 rounded-2xl shadow-lg text-center max-w-sm w-[90%] border border-sakura/20">
+            <div class="w-16 h-16 bg-sakura/10 text-sakura rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fa-solid fa-lock text-2xl"></i>
+            </div>
+            
+            
+            <input type="password" id="pwd-input" placeholder="" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-sakura focus:ring-2 focus:ring-sakura/20 mb-3 text-center tracking-widest text-gray-700">
+            
+            <!-- 💡 密碼提示設定在這裡 -->
+            <div class="text-xs text-gray-400 mb-6 tracking-wide">
+                <i class="fa-regular fa-lightbulb mr-1"></i>
+            </div>
+
+            <button onclick="checkPassword()" class="w-full bg-sakura text-white font-bold py-3 rounded-xl shadow-md shadow-sakura/30 hover:bg-sakura/90 transition-colors active:scale-95">
+                確認
+            </button>
+            <p id="pwd-error" class="text-red-400 text-xs mt-3 hidden animate-pulse">密碼錯誤，請再試一次！</p>
+        </div>
+    </div>
+    <!-- 👆 密碼門結束 👆 -->
+
+    
+        <!-- 這是你原本的 Talk 列表頁... -->
+    <div class="w-full max-w-md bg-appbg h-full relative overflow-hidden shadow-2xl">
+
+        <!-- ========================================== -->
+        <!-- 📱 畫面 1：Talk 列表頁 (統一列表) -->
+        <!-- ========================================== -->
+        <div id="list-screen" class="absolute inset-0 flex flex-col screen-transition active-screen z-10 bg-white">
+            
+           <header class="pt-12 pb-3 px-4 flex items-center justify-center border-b border-sakura/30">
+                <h1 class="text-sakura text-lg font-medium tracking-widest">トーク</h1>
+            </header>
+
+            <main class="flex-1 overflow-y-auto no-scrollbar pb-24 pt-6">
+                <!-- 統一列表網格：拿掉上線/離線分類 -->
+                <div class="grid grid-cols-3 gap-y-8 gap-x-2 px-2" id="room-grid">
+                    <!-- JS 會動態生成所有成員 -->
+                </div>
+            </main>
+
+           
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 💬 畫面 2：聊天室頁面 (極速加載版) -->
+        <!-- ========================================== -->
+        <div id="chat-screen" class="screen-transition slide-in-right absolute inset-0 z-20 bg-[#ffffff] flex flex-col w-full h-full">
+        
+        <header class="pt-3 pb-3 px-4 flex items-center justify-between border-b border-sakura/50 shadow-sm bg-white z-10">
+            <div class="flex items-center gap-3">
+                <button onclick="goBack()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-sakura/20 transition-colors shrink-0">
+                    <i class="fas fa-chevron-left text-sakura"></i>
+                </button>
+                <h1 id="chat-title" class="text-sakura text-sm font-bold truncate max-w-[200px] text-center">成員名字</h1>
+                
+            </div>
+            
+            <button id="menu-btn" onclick="toggleMenu(event)" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 cursor-pointer shrink-0">
+                <i class="fas fa-ellipsis-v text-sakura"></i>
+            </button>
+           
+
+        </header>
+<div id="search-bar-container" class="hidden bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-2 shadow-sm shrink-0 z-10 transition-all">
+            <div class="flex-1 relative">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                <input type="text" id="search-input" placeholder="搜尋訊息..." class="w-full bg-gray-100 rounded-full py-1.5 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-sakura/50">
+            </div>
+            <button onclick="closeSearch()" class="text-gray-500 text-sm whitespace-nowrap px-2">取消</button>
+        </div>
+        
+        <div id="dropdown-menu" class="hidden absolute top-14 right-4 bg-white rounded-lg shadow-xl border border-gray-100 w-48 z-50 overflow-hidden">
+            <button onclick="openSearch()" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 border-b border-gray-50 transition-colors">
+                <i class="fas fa-search text-sakura w-4 text-center"></i>文字搜尋
+            </button>
+            <button onclick="openMediaGallery()" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 border-b border-gray-50 transition-colors">
+                <i class="fas fa-th text-sakura w-4 text-center"></i><span id="media-btn-text">媒體一覽</span>
+            </button>
+            <button onclick="openDatePicker()" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors">
+                <i class="far fa-calendar-alt text-sakura w-4 text-center"></i>日期搜尋
+            </button>
+        </div>
+
+        <div id="chat-container" class="flex-1 overflow-y-auto p-2 pt-4 pb-10 w-full">
+            </div>
+    </div>
+            
+
+            <main id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-6 no-scrollbar bg-white">
+                <!-- JS 動態生成，離開時自動清空釋放記憶體 -->
+            </main>
+
+            
+        </div>
+    </div>
+<div id="media-screen" class="hidden absolute inset-0 z-30 bg-white flex flex-col w-full h-full max-w-md mx-auto">            
+            <header class="pt-3 pb-3 px-4 flex items-center justify-between border-b border-gray-100 bg-white z-10 shrink-0">
+                <button onclick="closeMediaGallery()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-50 transition-colors">
+                    <i class="fas fa-chevron-left text-sakura text-lg"></i>
+                </button>
+                <h1 class="text-sakura text-sm font-bold">メディア一覧</h1>
+                <button class="w-8 h-8 flex items-center justify-center text-sakura">
+                    <i class="far fa-calendar-alt text-lg"></i>
+                </button>
+            </header>
+
+            <div class="flex border-b border-gray-200 shrink-0 bg-white">
+                <button id="tab-image" onclick="switchMediaTab('image')" class="flex-1 py-3 text-sakura border-b-2 border-sakura transition-colors">
+                    <i class="far fa-image text-lg"></i>
+                </button>
+                <button id="tab-video" onclick="switchMediaTab('video')" class="flex-1 py-3 text-gray-300 hover:text-gray-400 border-b-2 border-transparent transition-colors">
+                    <i class="fas fa-film text-lg"></i>
+                </button>
+                <button id="tab-audio" onclick="switchMediaTab('audio')" class="flex-1 py-3 text-gray-300 hover:text-gray-400 border-b-2 border-transparent transition-colors">
+                    <i class="fas fa-volume-up text-lg"></i>
+                </button>
+            </div>
+
+            <div id="media-content-container" class="flex-1 overflow-y-auto p-4 no-scrollbar pb-24">
+                </div>
+
+            <div id="audio-player-ui" class="hidden absolute bottom-0 w-full bg-gray-50 border-t border-gray-200 p-6 pb-8 flex flex-col gap-4 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-20">
+                <div class="w-full bg-gray-200 h-1.5 rounded-full relative">
+                    <div class="absolute left-0 top-0 h-full w-0 bg-sakura rounded-full"></div>
+                    <div class="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-gray-400 rounded-full shadow"></div>
+                </div>
+                <div class="flex items-center justify-between text-sakura px-2">
+                    <i class="fas fa-volume-up text-xl text-gray-400"></i>
+                    <i class="fas fa-play text-2xl ml-4"></i>
+                    <span class="text-xs text-gray-400 tracking-widest">--:--</span>
+                </div>
+            </div>
+        </div>
+    <script src="./messages_db.js"></script>
+    <script>
+        // --- 第一部分：圖庫庫 ---
+        const MEMBER_DB = {
+            "ozono": { name: "大園 玲", avatar: "	https://sakurazaka46.com/images/14/f70/6cf80fb594607faec98674c9e8eac/1000_1000_102400.jpg" },
+            "takemoto": { name: "武元 唯衣", avatar: "https://sakurazaka46.com/images/14/368/a47ffb797e9911f41370509d2066d/1000_1000_102400.jpg" },
+            "tamura": { name: "田村 保乃", avatar: "https://sakurazaka46.com/images/14/75d/eb258ee5e23bf177e7f457200e9e6/1000_1000_102400.jpg" },
+            "matsuda": { name: "松田 里奈", avatar: "https://sakurazaka46.com/images/14/de8/01c8fb276815e134875196a7b5800/1000_1000_102400.jpg" },
+            "masumoto": { name: "增本 綺良", avatar: "	https://sakurazaka46.com/images/14/640/e18c5d5478c704dc295cd80610393/1000_1000_102400.jpg" },
+            "moriya": { name: "守屋 麗奈", avatar: "	https://sakurazaka46.com/images/14/1f6/e449b543b79e889ad163e984b286b/1000_1000_102400.jpg" },
+            "yamasaki": { name: "山﨑 天", avatar: "https://sakurazaka46.com/images/14/107/65ad91c3ac2cc5419238c70a496f7/1000_1000_102400.jpg" },
+            "takemoto_grad": { name: "【期間限定】武元唯衣卒業セレモニー", avatar: "https://drive.google.com/thumbnail?id=1OkHAlmudXNllqb6NzxvLt07009aR1sbZ&sz=w500" },
+        
+            //2nd members
+            "endo_h": { name: "遠藤 光莉", avatar: "https://sakurazaka46.com/images/14/423/f8775e5a749ea13fbf0d2efa42226/400_1080_102400.jpg" },
+            "onuma": { name: "大沼 晶保", avatar: "https://sakurazaka46.com/images/14/ba6/a44f36a54d4327bd2639c5624658d/400_1080_102400.jpg" },
+            "kousaka": { name: "幸阪 茉里乃", avatar: "https://sakurazaka46.com/images/14/6da/9fee36187437c3f6f96f8c21f3ce5/400_1080_102400.jpg" },
+            "fujiyoshi": { name: "藤吉 夏鈴", avatar: "https://sakurazaka46.com/images/14/60b/85031e7f8c0af9dd7eba91904ca97/400_1080_102400.jpg" },
+            "morita": { name: "森田 ひかる", avatar: "	https://sakurazaka46.com/images/14/897/5e3898e23a7e772e57bd3f9769399/1000_1000_102400.jpg" },
+
+            //3rd members
+            "ishimori": { name: "石森 璃花", avatar: "https://sakurazaka46.com/images/14/96c/e09c33f326876209556dd38ada02d/400_320_102400.jpg" },
+            "endo_r": { name: "遠藤 理子", avatar: "https://sakurazaka46.com/images/14/d69/6df426b2e6f16523b91fca0be779d/400_1080_102400.jpg" },
+            "odakura": { name: "小田倉 麗奈", avatar: "	https://sakurazaka46.com/images/14/078/60e215d29238247bb8b450990d660/400_1080_102400.jpg" },
+            "kojima": { name: "小島 凪紗", avatar: "https://sakurazaka46.com/images/14/1c6/fa68af8880f33e0f0bd1b0fa55b23/400_1080_102400.jpg" },
+            "taniguchi": { name: "谷口 愛季", avatar: "https://sakurazaka46.com/images/14/bbb/9661617ea1cae3d5722a04086b3b2/400_1080_102400.jpg" },
+            "nakashima": { name: "中嶋 優月", avatar: "https://sakurazaka46.com/images/14/9a0/49a7ba07c8a4e3e4d6e74f006c047/400_1080_102400.jpg" },
+            "madono": { name: "的野 美青", avatar: "https://sakurazaka46.com/images/14/482/353b146b31b3868ae9fdbb399e1a7/400_1080_102400.jpg" },
+            "mukai": { name: "向井 純葉", avatar: "	https://sakurazaka46.com/images/14/9ae/17778d4155da0c18a427f993973b8/400_1080_102400.jpg" },
+            "murai": { name: "村井 優", avatar: "	https://sakurazaka46.com/images/14/ab2/a8eacdd0e3d6909c3faec11166900/400_1080_102400.jpg" },
+            "murayama": { name: "村山 美羽", avatar: "	https://sakurazaka46.com/images/14/cf4/652aff795272b42ba8fb2afc0853f/400_1080_102400.jpg" },
+            "yamashita": { name: "山下 瞳月", avatar: "	https://sakurazaka46.com/images/14/3f4/d0a80251dbb05f5ff26a4cc695ea9/1000_1000_102400.jpg" },
+
+            //4th members
+            "yamada": { name: "山田 桃実", avatar: "	https://sakurazaka46.com/images/14/676/8b28bb50d64b1f8b3fed70b156476/400_320_102400.jpg" },
+            "nakagawa": { name: "中川 智尋", avatar: "	https://sakurazaka46.com/images/14/d72/c7bc8a8661d1ac165f281b5e05619/400_320_102400.jpg" },
+            "yamagawa": { name: "山川 宇衣", avatar: "	https://sakurazaka46.com/images/14/c98/d7513f7ae741f67b2e22fb3519a13/400_320_102400.jpg" },
+            "inaguma": { name: "稲熊 ひな", avatar: "	https://sakurazaka46.com/images/14/e10/03eb3f4f005c628c086bbad020760/400_320_102400.jpg" },
+            "sato": { name: "佐藤 愛桜", avatar: "https://sakurazaka46.com/images/14/35d/3c74f9e90f2436549fad9918ba4ac/400_320_102400.jpg" },
+            "katsumada": { name: "勝又 春", avatar: "	https://sakurazaka46.com/images/14/af8/d7373c8f6d516b2546983d0da9546/400_320_102400.jpg" },
+            "meguro": { name: "目黒 陽色", avatar: "	https://sakurazaka46.com/images/14/c98/d7513f7ae741f67b2e22fb3519a13/400_320_102400.jpg" },
+            "asai": { name: "浅井 恋乃未", avatar: "https://sakurazaka46.com/images/14/05a/a333e9c23bd75ee0b826e12bd297f/400_320_102400.jpg" },
+            "matsumoto": { name: "松本 和子", avatar: "	https://sakurazaka46.com/images/14/d72/c7bc8a8661d1ac165f281b5e05619/400_320_102400.jpg" },
+        };
+
+        // --- 第二部分：統一列表 ---
+        const ROOM_LIST = [
+            { id: "ozono", title: "大園 玲", thumbnail: MEMBER_DB["ozono"].avatar },
+            { id: "takemoto", title: "武元 唯衣", thumbnail: MEMBER_DB["takemoto"].avatar },
+            { id: "tamura", title: "田村 保乃", thumbnail: MEMBER_DB["tamura"].avatar },
+            { id: "matsuda", title: "松田 里奈", thumbnail: MEMBER_DB["matsuda"].avatar },
+            { id: "moriya", title: "守屋 麗奈", thumbnail: MEMBER_DB["moriya"].avatar },
+            { id: "yamasaki", title: "山﨑 天", thumbnail: MEMBER_DB["yamasaki"].avatar },
+            { id: "masumoto", title: "增本 綺良", thumbnail: MEMBER_DB["masumoto"].avatar },
+            { id: "takemoto_grad", title: "【期間限定】武元唯衣卒業セレモニー", thumbnail: MEMBER_DB["takemoto_grad"].avatar }
+        ];
+
+
+        let currentMemberId = ''; // 🌟 記住現在是誰的房間
+        const listScreen = document.getElementById('list-screen');
+        const chatScreen = document.getElementById('chat-screen');
+        const chatContainer = document.getElementById('chat-container');
+        const chatTitle = document.getElementById('chat-title');
+        const formatText = (text) => text.replace(/\n/g, '<br>');
+
+        // 1. 渲染無分類列表
+        function initList() {
+            const grid = document.getElementById('room-grid');
+            grid.innerHTML = '';
+            ROOM_LIST.forEach(room => {
+                const displayTitle = room.title.length > 10 ? room.title.substring(0, 10) + '...' : room.title;
+                const html = `
+                    <div class="flex flex-col items-center gap-2 cursor-pointer hover:opacity-80 transition" onclick="openChat('${room.id}', '${room.title}')">
+                        <img src="${room.thumbnail}" alt="${room.title}" class="w-[72px] h-[72px] rounded-full object-cover shadow-sm border border-gray-100">
+                        <span class="text-[10px] text-sakura text-center w-full truncate px-1">${displayTitle}</span>
+                    </div>
+                `;
+                grid.insertAdjacentHTML('beforeend', html);
+            });
+        }
+
+        // 2. 打開聊天室 (加入懶加載技術)
+        function openChat(roomId, title) {
+            currentMemberId = roomId; // 🌟 每次點進去，先把名字存起來！
+            const messages = MESSAGES_DB[roomId] || [];
+            chatTitle.innerText = title;
+            chatContainer.innerHTML = ''; 
+
+            // 預先建構巨大的 HTML 字串，再一次性寫入 DOM，比一則一則寫入快非常多！
+            let fullHtml = '';
+
+            messages.forEach(msg => {
+                const sender = MEMBER_DB[msg.senderId] || { name: "System", avatar: "https://placehold.co/150x150" };
+                let contentHtml = '';
+                    
+                    // 💡 神奇小工具：從網址中抽出 Google Drive 的檔案 ID
+                    let fileId = "";
+                    if (msg.content.includes("id=")) {
+                        fileId = msg.content.split("id=")[1].split("&")[0];
+                    }
+
+                    if (msg.type === 'text') {
+                        contentHtml = `<p class="whitespace-pre-wrap leading-relaxed break-all">${msg.content}</p>`;
+                    } else if (msg.type === 'image') {
+                        let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.content;
+                        contentHtml = `
+                            <div class="relative max-w-full rounded-lg overflow-hidden group inline-block">
+                                <img src="${msg.content}" loading="lazy" class="max-w-[240px] max-h-[350px] object-cover cursor-pointer" onclick="viewMediaFull('${msg.content}', 'image')">
+                                <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80">
+                                    <i class="fas fa-download text-sm"></i>
+                                </a>
+                            </div>
+                        `;
+                    } else if (msg.type === 'video') {
+                        // 🎬 影片：偽裝播放器 (縮圖 + 置中播放鍵 -> 另開官方播放器)
+                        let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.content;
+                        let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.content;
+                        let thumbnailUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : ""; 
+                        
+                        contentHtml = `
+                            <div class="relative max-w-full rounded-lg overflow-hidden bg-black group inline-block cursor-pointer" onclick="window.open('${viewUrl}', '_blank')">
+                                <img src="${thumbnailUrl}" class="max-w-[240px] max-h-[400px] object-cover opacity-80 group-hover:opacity-90 transition-opacity">
+                                
+                                <div class="absolute inset-0 flex items-center justify-center">
+                                    <div class="bg-black/60 rounded-full w-12 h-12 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                        <i class="fas fa-play text-white text-lg ml-1"></i>
+                                    </div>
+                                </div>
+                                
+                                <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 z-10" title="下載影片">
+                                    <i class="fas fa-download text-sm"></i>
+                                </a>
+                            </div>
+                        `;
+                    } else if (msg.type === 'audio') {
+                        // 🎵 音檔：按鈕化 (點擊 -> 另開官方播放器)
+                        let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.content;
+                        let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.content;
+                        
+                        contentHtml = `
+                            <div class="relative bg-white p-3 rounded-lg shadow-sm border border-gray-200 flex flex-col gap-2 group inline-block cursor-pointer hover:bg-gray-50 transition-colors w-[220px]" onclick="window.open('${viewUrl}', '_blank')">
+                                <div class="text-sm text-sakura font-bold flex items-center gap-2">
+                                    <div class="bg-sakura text-white rounded-full w-7 h-7 flex items-center justify-center">
+                                        <i class="fas fa-phone-alt text-[12px]"></i>
+                                    </div>
+                                    播放電話語音
+                                </div>
+                                
+                                <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute top-3 right-3 bg-gray-100 text-gray-500 w-7 h-7 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200 z-10" title="下載語音">
+                                    <i class="fas fa-download text-[12px]"></i>
+                                </a>
+                            </div>
+                        `;
+                    }
+
+                fullHtml += `
+                    <div class="flex gap-3 mb-6">
+                        <img src="${sender.avatar}" loading="lazy" class="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between mb-1">
+                                <div class="flex items-baseline gap-3">
+                                    <span class="text-xs text-gray-700 font-bold">${sender.name}</span>
+                                    <span class="text-[10px] text-gray-500">${msg.time}</span>
+                                </div>
+                            </div>
+                            <div class="bg-chatbg rounded-xl rounded-tl-sm p-3 inline-block shadow-sm">
+                                ${contentHtml}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            chatContainer.innerHTML = fullHtml;
+
+            // 執行畫面切換動畫
+            listScreen.classList.replace('active-screen', 'slide-out-left');
+            chatScreen.classList.replace('slide-in-right', 'active-screen');
+            
+        
+        }
+
+        // 3. 返回列表頁並執行「記憶體大掃除」
+        function goBack() {
+            
+            // 👇 補上這兩行：確保退出時收起搜尋列
+            document.getElementById('search-bar-container').classList.add('hidden');
+            document.getElementById('search-input').value = '';
+            
+            // ⭐️ 如果是在媒體模式退出的，強制先恢復原狀 ... (以下維持你原本的程式碼)
+            // ⭐️ 如果是在媒體模式退出的，強制先恢復原狀
+            if (isMediaOnly) {
+                isMediaOnly = false;
+                const galleryContainer = document.getElementById('media-gallery-container');
+                if(galleryContainer) galleryContainer.id = 'chat-container';
+                const mediaBtnText = document.getElementById('media-btn-text');
+                if(mediaBtnText) mediaBtnText.innerText = "媒體一覽";
+            }
+
+            document.getElementById('dropdown-menu').classList.add('hidden');
+
+            // ⭐️ 改用 remove / add 最安全，絕對不會白畫面
+            chatScreen.classList.remove('active-screen');
+            chatScreen.classList.add('slide-in-right');
+            
+            listScreen.classList.remove('slide-out-left');
+            listScreen.classList.add('active-screen');
+            
+            setTimeout(() => {
+                const chatContainer = document.getElementById('chat-container');
+                if(chatContainer) chatContainer.innerHTML = '';
+            }, 300);
+        }
+
+        // ==========================================
+        // 🌟 選單開關控制
+        // ==========================================
+        function toggleMenu(event) {
+            event.stopPropagation(); 
+            const menu = document.getElementById('dropdown-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        // 點擊螢幕其他地方時，自動把選單收起來
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('dropdown-menu');
+            const menuBtn = document.getElementById('menu-btn');
+            if (menu && menuBtn && !menu.classList.contains('hidden') && !menu.contains(event.target) && !menuBtn.contains(event.target)) {
+                menu.classList.add('hidden');
+            }
+        });
+        // ==========================================
+        // 🌟 新增功能：滿血九宮格媒體櫃 (核心邏輯！)
+        // ==========================================
+        let isMediaOnly = false;
+
+        // ==========================================
+        // 🌟 史詩級升級：獨立媒體庫控制系統
+        // ==========================================
+        let currentMediaTab = 'image'; // 預設顯示圖片
+
+        // 啟動媒體庫
+        function openMediaGallery() {
+            document.getElementById('dropdown-menu').classList.add('hidden'); // 關選單
+            document.getElementById('chat-screen').classList.add('hidden'); // 隱藏聊天室
+            document.getElementById('media-screen').classList.remove('hidden'); // 秀出媒體庫
+            switchMediaTab('image'); // 預設載入圖片分頁
+        }
+
+        // 關閉媒體庫，回到聊天室
+        function closeMediaGallery() {
+            document.getElementById('media-screen').classList.add('hidden');
+            document.getElementById('chat-screen').classList.remove('hidden');
+            // 重置語音播放器
+            document.getElementById('audio-player-ui').classList.add('hidden');
+        }
+
+        // 取得月份字串 (將 5/29 轉成 2026 年 5 月)
+        function getMonthKey(timeStr) {
+            if(!timeStr) return "未知月份";
+            let parts = timeStr.split(' ')[0].split('/'); // 抓出 5/29
+            if(parts.length >= 2) {
+                // 假設當前年份為 2026
+                return `2026 年 ${parts[0]} 月`;
+            }
+            return "未知月份";
+        }
+
+        // 切換分頁邏輯
+        // 🖼️ 切換媒體櫃分頁邏輯 (支援全年份、不限一年、精準分組版)
+        function switchMediaTab(tabType) {
+            currentMediaTab = tabType;
+            const container = document.getElementById('media-content-container');
+            const audioPlayer = document.getElementById('audio-player-ui');
+            if (!container) return; // 防呆
+            
+            // 1. 處理 Tab 按鈕的選取顏色變化
+            ['image', 'video', 'audio'].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                if (!btn) return;
+                if(t === tabType) {
+                    btn.classList.remove('text-gray-300', 'border-transparent');
+                    btn.classList.add('text-sakura', 'border-sakura');
+                } else {
+                    btn.classList.remove('text-sakura', 'border-sakura');
+                    btn.classList.add('text-gray-300', 'border-transparent');
+                }
+            });
+
+            // 2. 抓取目前成員的媒體，並過濾出當前分頁的類型 (image/video/audio)
+            const msgs = (typeof MESSAGES_DB !== 'undefined' && MESSAGES_DB[currentMemberId]) ? MESSAGES_DB[currentMemberId] : [];
+            const targetMsgs = msgs.filter(m => m.type === tabType);
+
+            // 3. 將資料按「真實年份 + 月份」進行完美分組
+            const groupedData = {};
+            targetMsgs.forEach(msg => {
+                // 讀取 Python 塞入的 msg.year，如果防呆沒抓到就預設 2026
+                const rYear = msg.year || 2026;
+                // 從 "05/17 14:30" 中切出月份
+                const rMonth = msg.time.split(/\s+/)[0].split('/')[0];
+                
+                // 組裝成唯一的 Key，例如 "2025 年 05 月" 或 "2026 年 04 月"
+                const groupKey = `${rYear} 年 ${rMonth} 月`;
+                
+                if (!groupedData[groupKey]) {
+                    groupedData[groupKey] = [];
+                }
+                groupedData[groupKey].push(msg);
+            });
+
+            // 4. 清空容器，準備重新渲染
+            container.innerHTML = '';
+
+            // 如果是圖片或影片，隱藏底部語音播放器，並生出 4 排九宮格
+            if(tabType === 'image' || tabType === 'video') {
+                if (audioPlayer) audioPlayer.classList.add('hidden');
+                
+                // 照時間或 Key 排序，讓舊年份到新年份都排出來
+                const sortedKeys = Object.keys(groupedData).sort(); // 最新月份在最上面
+                
+                if (sortedKeys.length === 0) {
+                    container.innerHTML = `<div class="text-center text-gray-400 mt-10 text-sm">這裡沒有${tabType === 'image' ? '照片' : '影片'}唷！</div>`;
+                    return;
+                }
+
+                sortedKeys.forEach(groupTitle => {
+                    let html = `<div class="month-header">${groupTitle}</div><div class="media-grid">`;
+                    
+                    groupedData[groupTitle].forEach(msg => {
+                        // 嘗試從網址提取 Google Drive 的 file ID
+                        let fileId = msg.content.includes("id=") ? msg.content.split("id=")[1].split("&")[0] : "";
+                        
+                        if(tabType === 'image') {
+                            // 圖片：點擊啟動滿版檢視器
+                            let imgUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : msg.content;
+                            html += `<div class="media-grid-item" onclick="viewMediaFull('${msg.content}', 'image')"><img src="${imgUrl}" loading="lazy"></div>`;
+                        } else if(tabType === 'video') {
+                            // 影片：有縮圖並跳轉到雲端播放
+                            let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.content;
+                            let thumbUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : "";
+                            html += `
+                                <div class="media-grid-item" onclick="window.open('${viewUrl}', '_blank')">
+                                    <img src="${thumbUrl}" loading="lazy">
+                                    <div class="absolute inset-0 flex items-center justify-center"><i class="fas fa-play text-white/80 text-2xl drop-shadow-md"></i></div>
+                                </div>`;
+                        }
+                    });
+                    html += `</div>`;
+                    container.insertAdjacentHTML('beforeend', html);
+                });
+
+            } else if (tabType === 'audio') {
+                // 如果是語音，秀出底層播放器 UI
+                if (audioPlayer) audioPlayer.classList.remove('hidden');
+                
+                const sender = MEMBER_DB[currentMemberId] || { name: "Member", avatar: "" };
+                const sortedKeys = Object.keys(groupedData).sort();
+
+                if (sortedKeys.length === 0) {
+                    container.innerHTML = `<div class="text-center text-gray-400 mt-10 text-sm">這裡沒有語音訊息唷！</div>`;
+                    return;
+                }
+
+                sortedKeys.forEach(groupTitle => {
+                    // 語音列表也加上完美的年份標頭！
+                    container.insertAdjacentHTML('beforeend', `<div class="month-header">${groupTitle}</div>`);
+                    
+                    groupedData[groupTitle].forEach(msg => {
+                        let fileId = msg.content.includes("id=") ? msg.content.split("id=")[1].split("&")[0] : "";
+                        let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.content;
+                        
+                        // 用它自帶的真實年份組裝日期
+                        let fullDate = `${msg.year}/${msg.time}`; 
+                        
+                        let html = `
+                            <div class="audio-list-item" onclick="window.open('${viewUrl}', '_blank')">
+                                <div class="flex items-center gap-3">
+                                    <div class="relative">
+                                        <img src="${sender.avatar}" class="w-10 h-10 rounded-full object-cover border border-gray-100">
+                                        <div class="absolute top-0 right-0 w-3 h-3 bg-sakura rounded-full border-2 border-white"></div>
+                                    </div>
+                                    <span class="text-sm font-medium text-gray-700">${sender.name}</span>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-xs text-gray-500 mb-1">${fullDate}</div>
+                                    <div class="text-xs text-gray-400 tracking-widest">--:--</div>
+                                </div>
+                            </div>
+                        `;
+                        container.insertAdjacentHTML('beforeend', html);
+                    });
+                });
+            }
+        }
+
+ // ==========================================
+        // 🌟 全螢幕檢視器控制
+        // ==========================================
+        function viewMediaFull(url, type) {
+            const modal = document.getElementById('media-modal');
+            const modalImg = document.getElementById('modal-media-content-img');
+            
+            modalImg.classList.add('hidden');
+            
+            if (type === 'image') {
+                modalImg.src = url;
+                modalImg.classList.remove('hidden');
+            }
+            modal.classList.add('active');
+        }
+
+        function closeMediaModal() {
+            document.getElementById('media-modal').classList.remove('active');
+        }
+
+        // ==========================================
+        // 🌟 最終升級：精美日曆與日期跳轉
+        // ==========================================
+        // ==========================================
+        // 🌟 最終升級：精美日曆與防彈日期跳轉
+        // ==========================================
+        let currentCalDate = new Date();
+
+        function openDatePicker() {
+            document.getElementById('dropdown-menu').classList.add('hidden');
+            document.getElementById('date-picker-modal').classList.remove('hidden');
+            renderCalendar(currentCalDate.getFullYear(), currentCalDate.getMonth());
+        }
+
+        function closeDatePicker() {
+            document.getElementById('date-picker-modal').classList.add('hidden');
+        }
+
+        function changeMonth(offset) {
+            currentCalDate.setMonth(currentCalDate.getMonth() + offset);
+            renderCalendar(currentCalDate.getFullYear(), currentCalDate.getMonth());
+        }
+
+        // 產生月曆積木
+        function renderCalendar(year, month) {
+            const daysContainer = document.getElementById('calendar-days');
+            if(!daysContainer) return; 
+            daysContainer.innerHTML = '';
+            document.getElementById('calendar-month-year').innerText = `${year} 年 ${month + 1} 月`;
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            // 🌟 1. 直接抓取資料庫
+            const msgs = (typeof MESSAGES_DB !== 'undefined' && MESSAGES_DB[currentMemberId]) ? MESSAGES_DB[currentMemberId] : [];
+            const activeDates = new Set();
+            
+            msgs.forEach(m => {
+                // 🌟 2. 核心：直接比對你 Python 寫入的真實 year！
+                if (m.year === year) {
+                    // 把 05/04 轉成 5 跟 4
+                    let parts = m.time.split(/\s+/)[0].split('/');
+                    let mMonth = parseInt(parts[0], 10);
+                    let mDay = parseInt(parts[1], 10);
+                    activeDates.add(`${mMonth}-${mDay}`);
+                }
+            });
+
+            // 填補前面的空白格子
+            for (let i = 0; i < firstDay; i++) {
+                daysContainer.innerHTML += `<div></div>`;
+            }
+
+            // 產生日期積木
+            for (let i = 1; i <= daysInMonth; i++) {
+                const hasMsg = activeDates.has(`${month + 1}-${i}`);
+
+                if (hasMsg) {
+                    daysContainer.innerHTML += `
+                        <div class="py-1">
+                            <div onclick="selectDate(${year}, ${month + 1}, ${i})" class="w-8 h-8 mx-auto flex items-center justify-center rounded-full bg-sakura text-white font-bold cursor-pointer shadow-md hover:scale-110 transition-transform">
+                                ${i}
+                            </div>
+                        </div>`;
+                } else {
+                    daysContainer.innerHTML += `
+                        <div class="py-1">
+                            <div onclick="alert('這天沒有傳送訊息唷！')" class="w-8 h-8 mx-auto flex items-center justify-center rounded-full text-gray-400 cursor-pointer hover:bg-gray-100 transition-colors">
+                                ${i}
+                            </div>
+                        </div>`;
+                }
+            }
+        }
+
+        // 🎯 點擊日期後的防彈跳轉魔法
+        // 🎯 點擊日期後的防彈跳轉魔法 (雙重保險版)
+        function selectDate(targetYear, targetMonth, targetDay) {
+            closeDatePicker();
+            
+            const mediaScreen = document.getElementById('media-screen');
+            const chatScreen = document.getElementById('chat-screen');
+            if (mediaScreen) mediaScreen.classList.add('hidden');
+            if (chatScreen) chatScreen.classList.remove('hidden');
+
+            const title = document.getElementById('chat-title').innerText;
+            openChat(currentMemberId, title);
+
+            // 稍微拉長到 400 毫秒，等畫面完全把幾百則訊息生出來
+            setTimeout(() => {
+                const chatContainer = document.getElementById('chat-container');
+                if (!chatContainer) return;
+
+                const msgs = (typeof MESSAGES_DB !== 'undefined' && MESSAGES_DB[currentMemberId]) ? MESSAGES_DB[currentMemberId] : [];
+                
+                let exactTimeStr = null;
+                let targetIndex = -1;
+
+                // 🌟 1. 先從資料庫找出「這一天第一則訊息」的準確時間 (例如 "05/04 13:05")
+                for (let i = 0; i < msgs.length; i++) {
+                    if (msgs[i].year === targetYear) {
+                        let parts = msgs[i].time.split(/\s+/)[0].split('/');
+                        let mMonth = parseInt(parts[0], 10);
+                        let mDay = parseInt(parts[1], 10);
+                        
+                        if (mMonth === targetMonth && mDay === targetDay) {
+                            exactTimeStr = msgs[i].time;
+                            targetIndex = i;
+                            break;
+                        }
+                    }
+                }
+
+                if (!exactTimeStr) return; // 沒找到就提早結束
+
+                // 🌟 2. 雙重保險尋找 DOM 元素
+                let foundItem = null;
+                
+                // 【保險 A】直接抓子元素 (避開 class 名字對不上的問題)
+                const domItems = chatContainer.children;
+                if (targetIndex !== -1 && domItems[targetIndex]) {
+                    foundItem = domItems[targetIndex];
+                }
+
+                // 【保險 B】如果陣列對位跑掉，直接拿時間去畫面上無情開搜！
+                if (!foundItem || !foundItem.innerText.includes(exactTimeStr)) {
+                    const allSpans = chatContainer.querySelectorAll('span');
+                    for (let span of allSpans) {
+                        // 比對畫面上的文字是不是我們要的時間
+                        if (span.innerText.trim() === exactTimeStr) {
+                            // 往上找到包含整則訊息的外層大框框
+                            foundItem = span.closest('.flex') || span.parentElement.parentElement.parentElement;
+                            break;
+                        }
+                    }
+                }
+
+                // 🌟 3. 執行防彈追蹤捲動
+                if (foundItem) {
+                    foundItem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    
+                    // 連續兩次鎖定，抵抗圖片載入撐開版面的反作用力！
+                    setTimeout(() => foundItem.scrollIntoView({ behavior: 'auto', block: 'start' }), 400);
+                    setTimeout(() => foundItem.scrollIntoView({ behavior: 'smooth', block: 'start' }), 800);
+
+                    // 閃爍提示效果
+                    const bubble = foundItem.querySelector('.bg-chatbg') || foundItem.querySelector('div[class*="bg-"]');
+                    if(bubble) {
+                        bubble.classList.add('!bg-sakura/30', 'transition-colors', 'duration-700');
+                        setTimeout(() => bubble.classList.remove('!bg-sakura/30'), 1500);
+                    }
+                }
+            }, 400);
+        }
+        window.onload = initList;
+        // ==========================================
+        // 🌟 新增功能：即時文字搜尋與螢光筆標記
+        // ==========================================
+        function openSearch() {
+            document.getElementById('dropdown-menu').classList.add('hidden'); // 關選單
+            document.getElementById('search-bar-container').classList.remove('hidden'); // 秀出搜尋列
+            document.getElementById('search-input').focus(); // 自動跳出鍵盤
+        }
+
+        function closeSearch() {
+            document.getElementById('search-bar-container').classList.add('hidden');
+            document.getElementById('search-input').value = '';
+            
+            // 重新呼叫原本的函數，恢復所有訊息
+            const title = document.getElementById('chat-title').innerText;
+            openChat(currentMemberId, title); 
+        }
+
+        // 監聽輸入框，只要打字就即時過濾！
+        document.getElementById('search-input').addEventListener('input', function(e) {
+            const keyword = e.target.value.trim().toLowerCase();
+            const chatContainer = document.getElementById('chat-container');
+            
+            // 如果輸入框被清空，就恢復原本的所有對話
+            if (!keyword) {
+                const title = document.getElementById('chat-title').innerText;
+                openChat(currentMemberId, title);
+                return;
+            }
+
+            // 安全抓取該成員的資料
+            const msgs = (typeof MESSAGES_DB !== 'undefined' ? MESSAGES_DB[currentMemberId] : []) || [];
+            
+            const filteredMsgs = msgs.filter(msg => 
+                msg.type === 'text' && msg.content.toLowerCase().includes(keyword)
+            );
+
+            // 如果找不到訊息
+            if (filteredMsgs.length === 0) {
+                chatContainer.innerHTML = `<div class="text-center text-gray-400 mt-10 text-sm font-medium">找不到包含「${keyword}」的訊息</div>`;
+                return;
+            }
+
+            // 🌟 致命 Bug 修復：這裡原本寫錯成 memberData，現在改回你正確的 MEMBER_DB！
+            const sender = MEMBER_DB[currentMemberId] || { name: "System", avatar: "" };
+            let fullHtml = '';
+            
+            filteredMsgs.forEach(msg => {
+                // 用正則表達式，把關鍵字包上一層黃色背景的 HTML (螢光筆效果)
+                const regex = new RegExp(`(${keyword})`, 'gi');
+                const highlightedContent = msg.content.replace(regex, `<span class="bg-yellow-200 text-yellow-800 rounded px-1">$1</span>`);
+                
+                let contentHtml = `<p class="whitespace-pre-wrap leading-relaxed break-all">${highlightedContent}</p>`;
+                
+                fullHtml += `
+                    <div class="flex items-start gap-3 w-full mb-6 relative message-item" data-type="text">
+                        <img src="${sender.avatar}" class="w-10 h-10 rounded-full object-cover border border-gray-100 flex-shrink-0 shadow-sm z-10" loading="lazy">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between mb-1">
+                                <div class="flex items-baseline gap-3">
+                                    <span class="text-xs text-gray-700 font-bold">${sender.name}</span>
+                                    <span class="text-[10px] text-gray-500">${msg.time}</span>
+                                </div>
+                            </div>
+                            <div class="bg-chatbg rounded-xl rounded-tl-sm p-3 inline-block shadow-sm max-w-full overflow-hidden">
+                                ${contentHtml}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            chatContainer.innerHTML = fullHtml;
+        });
+         
+    </script>
+    <div id="media-modal" onclick="closeMediaModal()">
+        <button id="modal-close-btn">&times;</button>
+        <img id="modal-media-content-img" class="hidden" src="" alt="大圖模式">
+        <video id="modal-media-content-video" class="hidden" src="" controls></video>
+        <audio id="modal-media-content-audio" class="hidden" src="" controls></audio>
+    </div>
+    <div id="date-picker-modal" class="hidden fixed inset-0 z-[100] bg-black/40 flex flex-col justify-end transition-opacity">
+        <div class="bg-white rounded-t-3xl p-4 pb-8 shadow-2xl w-full max-w-md mx-auto relative transform transition-transform translate-y-0">
+            
+            <div class="flex justify-center items-center mb-6 text-gray-700 relative mt-2">
+                <div class="flex items-center gap-6">
+                    <button onclick="changeMonth(-1)" class="p-2 hover:bg-gray-100 rounded-full w-10 h-10 flex justify-center items-center transition-colors">
+                        <i class="fas fa-chevron-left text-sakura text-xl"></i>
+                    </button>
+                    <span id="calendar-month-year" class="font-medium text-[15px] tracking-widest w-28 text-center">2026 年 5 月</span>
+                    <button onclick="changeMonth(1)" class="p-2 hover:bg-gray-100 rounded-full w-10 h-10 flex justify-center items-center transition-colors">
+                        <i class="fas fa-chevron-right text-sakura text-xl"></i>
+                    </button>
+                </div>
+                <button onclick="closeDatePicker()" class="absolute right-2 text-gray-400 hover:text-gray-600 text-2xl transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="grid grid-cols-7 text-center text-xs text-gray-400 mb-4 font-medium">
+                <div class="text-red-400">日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div class="text-blue-400">土</div>
+            </div>
+            
+            <div id="calendar-days" class="grid grid-cols-7 text-center gap-y-4 text-sm font-medium text-gray-700 pb-4">
+                </div>
+            
+        </div>
+    </div>
+</body>
+</html>
