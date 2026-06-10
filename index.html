@@ -19,6 +19,31 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
     <script>
+        // 網頁初始化：從本機口袋拿出記憶的暱稱，沒有就預設為 'ファン'
+        let userNickname = localStorage.getItem('skz_nickname') || '○○';
+
+        function openNicknameModal() {
+            document.getElementById('nickname-modal').classList.remove('hidden');
+            document.getElementById('nickname-input').value = userNickname === '○○' ? '' : userNickname;
+        }
+
+        function closeNicknameModal() {
+            document.getElementById('nickname-modal').classList.add('hidden');
+        }
+
+        function saveNickname() {
+            const value = document.getElementById('nickname-input').value.trim();
+            userNickname = value !== "" ? value : '○○';
+            
+            // 永久記住這個名字
+            localStorage.setItem('skz_nickname', userNickname);
+            closeNicknameModal();
+            
+            // 儲存後自動重新刷新聊天畫面，讓名字立刻變過來
+            if (typeof currentRoomId !== 'undefined' && currentRoomId) {
+                loadRoom(currentRoomId); 
+            }
+        }
         tailwind.config = {
             theme: {
                 extend: {
@@ -286,7 +311,7 @@
     
         <!-- 這是你原本的 Talk 列表頁... -->
     <div class="w-full max-w-md bg-appbg h-full relative overflow-hidden shadow-2xl">
-
+        
         <!-- ========================================== -->
         <!-- 📱 畫面 1：Talk 列表頁 (統一列表) -->
         <!-- ========================================== -->
@@ -294,6 +319,8 @@
             
            <header class="pt-12 pb-3 px-4 flex items-center justify-center border-b border-sakura/30">
                 <h1 class="text-sakura text-lg font-medium tracking-widest">トーク</h1>
+                <div class="flex items-center gap-2">
+                </div>
             </header>
 
             <main class="flex-1 overflow-y-auto no-scrollbar pb-24 pt-6">
@@ -400,13 +427,19 @@
     <script>
         // --- 第一部分：圖庫庫 ---
         const MEMBER_DB = {
-            "ozono": { name: "大園 玲", avatar: "	https://sakurazaka46.com/images/14/f70/6cf80fb594607faec98674c9e8eac/1000_1000_102400.jpg" },
-            "takemoto": { name: "武元 唯衣", avatar: "https://sakurazaka46.com/images/14/368/a47ffb797e9911f41370509d2066d/1000_1000_102400.jpg" },
-            "tamura": { name: "田村 保乃", avatar: "https://sakurazaka46.com/images/14/75d/eb258ee5e23bf177e7f457200e9e6/1000_1000_102400.jpg" },
-            "matsuda": { name: "松田 里奈", avatar: "https://sakurazaka46.com/images/14/de8/01c8fb276815e134875196a7b5800/1000_1000_102400.jpg" },
-            "masumoto": { name: "增本 綺良", avatar: "	https://sakurazaka46.com/images/14/640/e18c5d5478c704dc295cd80610393/1000_1000_102400.jpg" },
-            "moriya": { name: "守屋 麗奈", avatar: "	https://sakurazaka46.com/images/14/1f6/e449b543b79e889ad163e984b286b/1000_1000_102400.jpg" },
-            "yamasaki": { name: "山﨑 天", avatar: "https://sakurazaka46.com/images/14/107/65ad91c3ac2cc5419238c70a496f7/1000_1000_102400.jpg" },
+            "ozono": { name: "大園 玲", avatar: "https://drive.google.com/thumbnail?id=1_F9z4C6izT4xDX5IByOt7ESVbZnbmSVf" },
+            "takemoto": { name: "武元 唯衣", avatar: "https://drive.google.com/thumbnail?id=1mzbeAQzz0l1zqdIxgeDKU40jUVUdv3-z" },
+            "tamura": { name: "田村 保乃", avatar: "https://drive.google.com/thumbnail?id=1Q9V0NLouaMiV4B_pjNB8g5YK4FIY2F8A" },
+            "matsuda": { name: "松田 里奈", avatar: "https://drive.google.com/thumbnail?id=1eMpQBJW0OHdghl77Ekb-EH_i2ITNDYmo" },
+            "masumoto": { name: "增本 綺良", avatar: "https://drive.google.com/thumbnail?id=1fDGNI0jLl1PBWlcIo5NJ-h1ejr9sLDsW" },
+            "moriya": { name: "守屋 麗奈", avatar: "https://drive.google.com/thumbnail?id=1K_UHo-bvn_qm66OQcYTnGzBLY7iXqwMs" },
+            "yamasaki": { name: "山﨑 天", avatar: "https://drive.google.com/thumbnail?id=1bSS-b8QETIMStQF1ChdXi5wlnGHHaDIR" },
+            "morita": { name: "森田 ひかる", avatar: "https://drive.google.com/thumbnail?id=1h8sWr5SVBVbWK59NYhbHz2E02PORdcHL" },
+            "yamashita": { name: "山下 瞳月", avatar: "	https://sakurazaka46.com/images/14/3f4/d0a80251dbb05f5ff26a4cc695ea9/1000_1000_102400.jpg" },
+            "taniguchi": { name: "谷口 愛季", avatar: "https://drive.google.com/thumbnail?id=11JJtPfC5ceC5PC55s3G11Adw0lWI7EN9" },
+            "nakashima": { name: "中嶋 優月", avatar: "https://drive.google.com/thumbnail?id=1f7RnW6zrYVGdMJQ3dQfRX6mEGkyBACbh" },
+
+
             "takemoto_grad": { name: "【期間限定】武元唯衣卒業セレモニー", avatar: "https://drive.google.com/thumbnail?id=17AV0JO7ly7VXAefTliCN-26ivPwW7G5-" },
             "shinzanmono": { name: "新参者", avatar: "https://drive.google.com/thumbnail?id=1OfVtFaUaLpxqlGX_tng7pkCNBdAQdrWL" },
         
@@ -415,20 +448,16 @@
             "onuma": { name: "大沼 晶保", avatar: "https://sakurazaka46.com/images/14/ba6/a44f36a54d4327bd2639c5624658d/400_1080_102400.jpg" },
             "kousaka": { name: "幸阪 茉里乃", avatar: "https://sakurazaka46.com/images/14/6da/9fee36187437c3f6f96f8c21f3ce5/400_1080_102400.jpg" },
             "fujiyoshi": { name: "藤吉 夏鈴", avatar: "https://sakurazaka46.com/images/14/60b/85031e7f8c0af9dd7eba91904ca97/400_1080_102400.jpg" },
-            "morita": { name: "森田 ひかる", avatar: "	https://sakurazaka46.com/images/14/897/5e3898e23a7e772e57bd3f9769399/1000_1000_102400.jpg" },
 
             //3rd members
             "ishimori": { name: "石森 璃花", avatar: "https://sakurazaka46.com/images/14/96c/e09c33f326876209556dd38ada02d/400_320_102400.jpg" },
             "endo_r": { name: "遠藤 理子", avatar: "https://sakurazaka46.com/images/14/d69/6df426b2e6f16523b91fca0be779d/400_1080_102400.jpg" },
             "odakura": { name: "小田倉 麗奈", avatar: "	https://sakurazaka46.com/images/14/078/60e215d29238247bb8b450990d660/400_1080_102400.jpg" },
             "kojima": { name: "小島 凪紗", avatar: "https://sakurazaka46.com/images/14/1c6/fa68af8880f33e0f0bd1b0fa55b23/400_1080_102400.jpg" },
-            "taniguchi": { name: "谷口 愛季", avatar: "https://sakurazaka46.com/images/14/bbb/9661617ea1cae3d5722a04086b3b2/400_1080_102400.jpg" },
-            "nakashima": { name: "中嶋 優月", avatar: "https://sakurazaka46.com/images/14/9a0/49a7ba07c8a4e3e4d6e74f006c047/400_1080_102400.jpg" },
             "madono": { name: "的野 美青", avatar: "https://sakurazaka46.com/images/14/482/353b146b31b3868ae9fdbb399e1a7/400_1080_102400.jpg" },
             "mukai": { name: "向井 純葉", avatar: "	https://sakurazaka46.com/images/14/9ae/17778d4155da0c18a427f993973b8/400_1080_102400.jpg" },
             "murai": { name: "村井 優", avatar: "	https://sakurazaka46.com/images/14/ab2/a8eacdd0e3d6909c3faec11166900/400_1080_102400.jpg" },
             "murayama": { name: "村山 美羽", avatar: "	https://sakurazaka46.com/images/14/cf4/652aff795272b42ba8fb2afc0853f/400_1080_102400.jpg" },
-            "yamashita": { name: "山下 瞳月", avatar: "	https://sakurazaka46.com/images/14/3f4/d0a80251dbb05f5ff26a4cc695ea9/1000_1000_102400.jpg" },
 
             //4th members
             "yamada": { name: "山田 桃実", avatar: "	https://sakurazaka46.com/images/14/676/8b28bb50d64b1f8b3fed70b156476/400_320_102400.jpg" },
@@ -444,17 +473,17 @@
 
         // --- 第二部分：統一列表 ---
         const ROOM_LIST = [
-            { id: "ozono", title: "大園 玲", thumbnail: MEMBER_DB["ozono"].avatar },
-            { id: "takemoto", title: "武元 唯衣", thumbnail: MEMBER_DB["takemoto"].avatar },
-            { id: "tamura", title: "田村 保乃", thumbnail: MEMBER_DB["tamura"].avatar },
-            { id: "matsuda", title: "松田 里奈", thumbnail: MEMBER_DB["matsuda"].avatar },
-            { id: "moriya", title: "守屋 麗奈", thumbnail: MEMBER_DB["moriya"].avatar },
-            { id: "yamasaki", title: "山﨑 天", thumbnail: MEMBER_DB["yamasaki"].avatar },
-            { id: "masumoto", title: "增本 綺良", thumbnail: MEMBER_DB["masumoto"].avatar },
-            { id: "morita", title: "森田 ひかる", thumbnail: MEMBER_DB["morita"].avatar },
-            { id: "taniguchi", title: "谷口愛季", thumbnail: MEMBER_DB["taniguchi"].avatar },
+            { id: "ozono", title: "大園 玲", thumbnail: "	https://sakurazaka46.com/images/14/f70/6cf80fb594607faec98674c9e8eac/1000_1000_102400.jpg"},
+            { id: "takemoto", title: "武元 唯衣", thumbnail: "https://sakurazaka46.com/images/14/368/a47ffb797e9911f41370509d2066d/1000_1000_102400.jpg" },
+            { id: "tamura", title: "田村 保乃", thumbnail: "https://sakurazaka46.com/images/14/75d/eb258ee5e23bf177e7f457200e9e6/1000_1000_102400.jpg" },
+            { id: "matsuda", title: "松田 里奈", thumbnail: "https://sakurazaka46.com/images/14/de8/01c8fb276815e134875196a7b5800/1000_1000_102400.jpg"},
+            { id: "moriya", title: "守屋 麗奈", thumbnail: "	https://sakurazaka46.com/images/14/1f6/e449b543b79e889ad163e984b286b/1000_1000_102400.jpg"},
+            { id: "yamasaki", title: "山﨑 天", thumbnail: "https://sakurazaka46.com/images/14/107/65ad91c3ac2cc5419238c70a496f7/1000_1000_102400.jpg" },
+            { id: "masumoto", title: "增本 綺良", thumbnail: "	https://sakurazaka46.com/images/14/640/e18c5d5478c704dc295cd80610393/1000_1000_102400.jpg" },
+            { id: "morita", title: "森田 ひかる", thumbnail: "	https://sakurazaka46.com/images/14/897/5e3898e23a7e772e57bd3f9769399/1000_1000_102400.jpg" },
+            { id: "taniguchi", title: "谷口愛季", thumbnail: "https://sakurazaka46.com/images/14/bbb/9661617ea1cae3d5722a04086b3b2/400_1080_102400.jpg" },
             { id: "yamashita", title: "山下瞳月", thumbnail: MEMBER_DB["yamashita"].avatar },
-            { id: "nakashima", title: "中嶋優月", thumbnail: MEMBER_DB["nakashima"].avatar },
+            { id: "nakashima", title: "中嶋優月", thumbnail: "https://sakurazaka46.com/images/14/9a0/49a7ba07c8a4e3e4d6e74f006c047/400_1080_102400.jpg" },
             { id: "shinzanmono", title: "新参者", thumbnail: MEMBER_DB["shinzanmono"].avatar },
             { id: "takemoto_grad", title: "【期間限定】武元唯衣卒業セレモニー", thumbnail: MEMBER_DB["takemoto_grad"].avatar }
         ];
@@ -481,6 +510,18 @@
                 `;
                 grid.insertAdjacentHTML('beforeend', html);
             });
+            const settingBtn = document.createElement('button');
+                settingBtn.className = 'flex flex-col items-center gap-3 transition-transform active:scale-95 group';
+                settingBtn.onclick = openNicknameModal;
+                settingBtn.innerHTML = `
+                    <div class="relative">
+                        <div class="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-md group-hover:border-pink-200 transition-colors bg-pink-50 flex justify-center items-center">
+                            <i class="fas fa-user-edit text-3xl text-pink-300 group-hover:text-pink-400 transition-colors"></i>
+                        </div>
+                    </div>
+                    <span class="text-xs font-medium text-gray-600 group-hover:text-pink-500 transition-colors">設定暱稱</span>
+                `;
+                grid.appendChild(settingBtn);
         }
 
         // 2. 打開聊天室 (加入懶加載技術)
@@ -496,66 +537,64 @@
             messages.forEach(msg => {
                 const sender = MEMBER_DB[msg.senderId] || { name: "System", avatar: "https://placehold.co/150x150" };
                 let contentHtml = '';
-                    
-                    // 💡 神奇小工具：從網址中抽出 Google Drive 的檔案 ID
-                    let fileId = "";
-                    if (msg.content.includes("id=")) {
-                        fileId = msg.content.split("id=")[1].split("&")[0];
-                    }
 
-                    if (msg.type === 'text') {
-                        contentHtml = `<p class="whitespace-pre-wrap leading-relaxed break-all">${msg.content}</p>`;
-                    } else if (msg.type === 'image') {
-                        let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.content;
-                        contentHtml = `
-                            <div class="relative max-w-full rounded-lg overflow-hidden group inline-block">
-                                <img src="${msg.content}" loading="lazy" class="max-w-[240px] max-h-[350px] object-cover cursor-pointer" onclick="viewMediaFull('${msg.content}', 'image')">
-                                <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80">
-                                    <i class="fas fa-download text-sm"></i>
-                                </a>
-                            </div>
-                        `;
-                    } else if (msg.type === 'video') {
-                        // 🎬 影片：偽裝播放器 (縮圖 + 置中播放鍵 -> 另開官方播放器)
-                        let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.content;
-                        let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.content;
-                        let thumbnailUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : ""; 
-                        
-                        contentHtml = `
-                            <div class="relative max-w-full rounded-lg overflow-hidden bg-black group inline-block cursor-pointer" onclick="window.open('${viewUrl}', '_blank')">
-                                <img src="${thumbnailUrl}" class="max-w-[240px] max-h-[400px] object-cover opacity-80 group-hover:opacity-90 transition-opacity">
-                                
-                                <div class="absolute inset-0 flex items-center justify-center">
-                                    <div class="bg-black/60 rounded-full w-12 h-12 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                                        <i class="fas fa-play text-white text-lg ml-1"></i>
-                                    </div>
+                // 🌟 第一塊積木：圖片
+                if (msg.picture && msg.picture !== "") {
+                    let fileId = msg.picture.includes("id=") ? msg.picture.split("id=")[1].split("&")[0] : "";
+                    let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.picture;
+                    contentHtml += `
+                        <div class="relative max-w-full rounded-lg overflow-hidden group inline-block mb-2">
+                            <img src="${msg.picture}" loading="lazy" class="max-w-[240px] max-h-[350px] object-cover cursor-pointer" onclick="viewMediaFull('${msg.picture}', 'image')">
+                            <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80">
+                                <i class="fas fa-download text-sm"></i>
+                            </a>
+                        </div><br>`;
+                }
+
+                // 🌟 第二塊積木：影片
+                if (msg.video && msg.video !== "") {
+                    let fileId = msg.video.includes("id=") ? msg.video.split("id=")[1].split("&")[0] : "";
+                    let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.video;
+                    let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.video;
+                    let thumbnailUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : ""; 
+                    contentHtml += `
+                        <div class="relative max-w-full rounded-lg overflow-hidden bg-black group inline-block cursor-pointer mb-2" onclick="window.open('${viewUrl}', '_blank')">
+                            <img src="${thumbnailUrl}" class="max-w-[240px] max-h-[400px] object-cover opacity-80 group-hover:opacity-90 transition-opacity">
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <div class="bg-black/60 rounded-full w-12 h-12 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                    <i class="fas fa-play text-white text-lg ml-1"></i>
                                 </div>
-                                
-                                <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 z-10" title="下載影片">
-                                    <i class="fas fa-download text-sm"></i>
-                                </a>
                             </div>
-                        `;
-                    } else if (msg.type === 'audio') {
-                        // 🎵 音檔：按鈕化 (點擊 -> 另開官方播放器)
-                        let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.content;
-                        let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.content;
-                        
-                        contentHtml = `
-                            <div class="relative bg-white p-3 rounded-lg shadow-sm border border-gray-200 flex flex-col gap-2 group inline-block cursor-pointer hover:bg-gray-50 transition-colors w-[220px]" onclick="window.open('${viewUrl}', '_blank')">
-                                <div class="text-sm text-sakura font-bold flex items-center gap-2">
-                                    <div class="bg-sakura text-white rounded-full w-7 h-7 flex items-center justify-center">
-                                        <i class="fas fa-phone-alt text-[12px]"></i>
-                                    </div>
-                                    播放電話語音
+                            <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 z-10" title="下載影片">
+                                <i class="fas fa-download text-sm"></i>
+                            </a>
+                        </div><br>`;
+                }
+
+                // 🌟 第三塊積木：語音
+                if (msg.voice && msg.voice !== "") {
+                    let fileId = msg.voice.includes("id=") ? msg.voice.split("id=")[1].split("&")[0] : "";
+                    let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.voice;
+                    let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.voice;
+                    contentHtml += `
+                        <div class="relative bg-white p-3 rounded-lg shadow-sm border border-gray-200 flex flex-col gap-2 group inline-block cursor-pointer hover:bg-gray-50 transition-colors w-[220px] mb-2" onclick="window.open('${viewUrl}', '_blank')">
+                            <div class="text-sm text-sakura font-bold flex items-center gap-2">
+                                <div class="bg-sakura text-white rounded-full w-7 h-7 flex items-center justify-center">
+                                    <i class="fas fa-phone-alt text-[12px]"></i>
                                 </div>
-                                
-                                <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute top-3 right-3 bg-gray-100 text-gray-500 w-7 h-7 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200 z-10" title="下載語音">
-                                    <i class="fas fa-download text-[12px]"></i>
-                                </a>
+                                播放電話語音
                             </div>
-                        `;
-                    }
+                            <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute top-3 right-3 bg-gray-100 text-gray-500 w-7 h-7 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200 z-10" title="下載語音">
+                                <i class="fas fa-download text-[12px]"></i>
+                            </a>
+                        </div><br>`;
+                }
+
+                // 🌟 第四塊積木：文字 (自動疊在最下面)
+                if (msg.text && msg.text !== "") {
+                    const displayContent = msg.text.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
+                    contentHtml += `<p class="whitespace-pre-wrap leading-relaxed break-all">${displayContent}</p>`;
+                }
 
                 fullHtml += `
                     <div class="flex gap-3 mb-6">
@@ -574,7 +613,6 @@
                     </div>
                 `;
             });
-
             chatContainer.innerHTML = fullHtml;
 
             // 執行畫面切換動畫
@@ -693,7 +731,12 @@
 
             // 2. 抓取目前成員的媒體，並過濾出當前分頁的類型 (image/video/audio)
             const msgs = (typeof MESSAGES_DB !== 'undefined' && MESSAGES_DB[currentMemberId]) ? MESSAGES_DB[currentMemberId] : [];
-            const targetMsgs = msgs.filter(m => m.type === tabType);
+            const targetMsgs = msgs.filter(m => {
+                if (tabType === 'image') return m.picture && m.picture !== '';
+                if (tabType === 'video') return m.video && m.video !== '';
+                if (tabType === 'audio') return m.voice && m.voice !== '';
+                return false;
+            });
 
             // 3. 將資料按「真實年份 + 月份」進行完美分組
             const groupedData = {};
@@ -731,16 +774,18 @@
                     let html = `<div class="month-header">${groupTitle}</div><div class="media-grid">`;
                     
                     groupedData[groupTitle].forEach(msg => {
-                        // 嘗試從網址提取 Google Drive 的 file ID
-                        let fileId = msg.content.includes("id=") ? msg.content.split("id=")[1].split("&")[0] : "";
+                        let fileUrl = '';
+                        if (tabType === 'image') fileUrl = msg.picture;
+                        else if (tabType === 'video') fileUrl = msg.video;
+                        else if (tabType === 'audio') fileUrl = msg.voice;
+
+                        let fileId = fileUrl.includes("id=") ? fileUrl.split("id=")[1].split("&")[0] : "";
                         
                         if(tabType === 'image') {
-                            // 圖片：點擊啟動滿版檢視器
-                            let imgUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : msg.content;
-                            html += `<div class="media-grid-item" onclick="viewMediaFull('${msg.content}', 'image')"><img src="${imgUrl}" loading="lazy"></div>`;
+                            let imgUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : fileUrl;
+                            html += `<div class="media-grid-item" onclick="viewMediaFull('${fileUrl}', 'image')"><img src="${imgUrl}" loading="lazy"></div>`;
                         } else if(tabType === 'video') {
-                            // 影片：有縮圖並跳轉到雲端播放
-                            let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.content;
+                            let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : fileUrl;
                             let thumbUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : "";
                             html += `
                                 <div class="media-grid-item" onclick="window.open('${viewUrl}', '_blank')">
@@ -770,8 +815,8 @@
                     container.insertAdjacentHTML('beforeend', `<div class="month-header">${groupTitle}</div>`);
                     
                     groupedData[groupTitle].forEach(msg => {
-                        let fileId = msg.content.includes("id=") ? msg.content.split("id=")[1].split("&")[0] : "";
-                        let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.content;
+                        let fileId = msg.voice.includes("id=") ? msg.voice.split("id=")[1].split("&")[0] : "";
+                        let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.voice;
                         
                         // 用它自帶的真實年份組裝日期
                         let fullDate = `${msg.year}/${msg.time}`; 
@@ -1006,7 +1051,7 @@
             const msgs = (typeof MESSAGES_DB !== 'undefined' ? MESSAGES_DB[currentMemberId] : []) || [];
             
             const filteredMsgs = msgs.filter(msg => 
-                msg.type === 'text' && msg.content.toLowerCase().includes(keyword)
+                msg.text && msg.text.toLowerCase().includes(keyword)
             );
 
             // 如果找不到訊息
@@ -1021,8 +1066,9 @@
             
             filteredMsgs.forEach(msg => {
                 // 用正則表達式，把關鍵字包上一層黃色背景的 HTML (螢光筆效果)
+                const displayContent = msg.text.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
                 const regex = new RegExp(`(${keyword})`, 'gi');
-                const highlightedContent = msg.content.replace(regex, `<span class="bg-yellow-200 text-yellow-800 rounded px-1">$1</span>`);
+                const highlightedContent = displayContent.replace(regex, `<span class="bg-yellow-200 text-yellow-800 rounded px-1">$1</span>`);
                 
                 let contentHtml = `<p class="whitespace-pre-wrap leading-relaxed break-all">${highlightedContent}</p>`;
                 
@@ -1079,6 +1125,17 @@
             <div id="calendar-days" class="grid grid-cols-7 text-center gap-y-4 text-sm font-medium text-gray-700 pb-4">
                 </div>
             
+        </div>
+    </div>
+    <div id="nickname-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[100] hidden flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white p-6 rounded-2xl w-80 shadow-2xl transform transition-all">
+            <h3 class="text-base font-bold text-gray-800 mb-2">設定暱稱</h3>
+            <input type="text" id="nickname-input" placeholder="請輸入暱稱 (預設: OO)" 
+                class="w-full border border-gray-200 rounded-xl p-3 mb-4 focus:outline-none focus:border-pink-400 focus:ring-1 focus:ring-pink-400 text-sm">
+            <div class="flex justify-end gap-2 text-sm font-medium">
+                <button onclick="closeNicknameModal()" class="px-4 py-2 text-gray-400 hover:bg-gray-50 rounded-xl transition-colors">取消</button>
+                <button onclick="saveNickname()" class="px-4 py-2 bg-pink-500 text-white rounded-xl hover:bg-pink-600 transition-colors shadow-sm">儲存設定</button>
+            </div>
         </div>
     </div>
 </body>
