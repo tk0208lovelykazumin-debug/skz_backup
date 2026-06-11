@@ -515,11 +515,11 @@
                 settingBtn.onclick = openNicknameModal;
                 settingBtn.innerHTML = `
                     <div class="relative">
-                        <div class="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-md group-hover:border-pink-200 transition-colors bg-pink-50 flex justify-center items-center">
+                        <div class="w-[72px] h-[72px] rounded-full overflow-hidden border-4 border-white shadow-md group-hover:border-pink-200 transition-colors bg-pink-50 flex justify-center items-center" style="min-width: 72px; min-height: 72px; width: 72px; height: 72px;">
                             <i class="fas fa-user-edit text-3xl text-pink-300 group-hover:text-pink-400 transition-colors"></i>
                         </div>
                     </div>
-                    <span class="text-xs font-medium text-gray-600 group-hover:text-pink-500 transition-colors">設定暱稱</span>
+                    <span class="text-[10px] font-medium text-gray-600 group-hover:text-pink-500 transition-colors">設定暱稱</span>
                 `;
                 grid.appendChild(settingBtn);
         }
@@ -543,12 +543,13 @@
                     let fileId = msg.picture.includes("id=") ? msg.picture.split("id=")[1].split("&")[0] : "";
                     let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.picture;
                     contentHtml += `
-                        <div class="relative max-w-full rounded-lg overflow-hidden group inline-block mb-2">
-                            <img src="${msg.picture}" loading="lazy" class="max-w-[240px] max-h-[350px] object-cover cursor-pointer" onclick="viewMediaFull('${msg.picture}', 'image')">
-                            <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80">
-                                <i class="fas fa-download text-sm"></i>
-                            </a>
-                        </div><br>`;
+                        <br><div class="relative w-full flex justify-center rounded-lg overflow-hidden group">
+                                <img src="${msg.picture}" loading="lazy" class="max-w-full max-h-[350px] object-contain cursor-pointer rounded-md mx-auto" onclick="viewMediaFull('${msg.picture}', 'image')">
+                                
+                                <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80">
+                                    <i class="fas fa-download text-sm"></i>
+                                </a>
+                            </div><br>`;
                 }
 
                 // 🌟 第二塊積木：影片
@@ -557,18 +558,20 @@
                     let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.video;
                     let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.video;
                     let thumbnailUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : ""; 
-                    contentHtml += `
-                        <div class="relative max-w-full rounded-lg overflow-hidden bg-black group inline-block cursor-pointer mb-2" onclick="window.open('${viewUrl}', '_blank')">
-                            <img src="${thumbnailUrl}" class="max-w-[240px] max-h-[400px] object-cover opacity-80 group-hover:opacity-90 transition-opacity">
-                            <div class="absolute inset-0 flex items-center justify-center">
-                                <div class="bg-black/60 rounded-full w-12 h-12 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                                    <i class="fas fa-play text-white text-lg ml-1"></i>
+                    contentHtml += `\
+                            <div class="relative w-full flex justify-center rounded-lg overflow-hidden bg-black group cursor-pointer" onclick="window.open('${viewUrl}', '_blank')">
+                                <img src="${thumbnailUrl}" class="max-w-full max-h-[400px] object-contain opacity-80 group-hover:opacity-90 transition-opacity mx-auto">
+                                
+                                <div class="absolute inset-0 flex items-center justify-center">
+                                    <div class="bg-black/60 rounded-full w-12 h-12 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                        <i class="fas fa-play text-white text-lg ml-1"></i>
+                                    </div>
                                 </div>
-                            </div>
-                            <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 z-10" title="下載影片">
-                                <i class="fas fa-download text-sm"></i>
-                            </a>
-                        </div><br>`;
+                                
+                                <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 z-10" title="下載影片">
+                                    <i class="fas fa-download text-sm"></i>
+                                </a>
+                            </div>`;
                 }
 
                 // 🌟 第三塊積木：語音
@@ -577,17 +580,12 @@
                     let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.voice;
                     let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.voice;
                     contentHtml += `
-                        <div class="relative bg-white p-3 rounded-lg shadow-sm border border-gray-200 flex flex-col gap-2 group inline-block cursor-pointer hover:bg-gray-50 transition-colors w-[220px] mb-2" onclick="window.open('${viewUrl}', '_blank')">
-                            <div class="text-sm text-sakura font-bold flex items-center gap-2">
-                                <div class="bg-sakura text-white rounded-full w-7 h-7 flex items-center justify-center">
+                            <div class="text-sm text-sakura font-bold flex items-center gap-2"onclick="window.open('${viewUrl}', '_blank')">
+                                <div class="bg-sakura text-white rounded-full w-8 h-8 flex items-center justify-center shrink-0">
                                     <i class="fas fa-phone-alt text-[12px]"></i>
                                 </div>
                                 播放電話語音
-                            </div>
-                            <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute top-3 right-3 bg-gray-100 text-gray-500 w-7 h-7 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200 z-10" title="下載語音">
-                                <i class="fas fa-download text-[12px]"></i>
-                            </a>
-                        </div><br>`;
+                            </div>`;
                 }
 
                 // 🌟 第四塊積木：文字 (自動疊在最下面)
@@ -599,15 +597,14 @@
                 fullHtml += `
                     <div class="flex gap-3 mb-6">
                         <img src="${sender.avatar}" loading="lazy" class="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0">
-                        <div class="flex-1 min-w-0">
+                        <div class="flex-1 min-w-0 pr-8">
                             <div class="flex items-center justify-between mb-1">
                                 <div class="flex items-baseline gap-3">
                                     <span class="text-xs text-gray-700 font-bold">${sender.name}</span>
                                     <span class="text-[10px] text-gray-500">${msg.year}/${msg.time}</span>
                                 </div>
                             </div>
-                            <div class="bg-chatbg rounded-xl rounded-tl-sm p-3 inline-block shadow-sm">
-                                ${contentHtml}
+                            <div class="bg-chatbg rounded-xl rounded-tl-sm p-3 block shadow-sm w-[330px]"> ${contentHtml}
                             </div>
                         </div>
                     </div>
@@ -912,7 +909,7 @@
 
             // 填補前面的空白格子
             for (let i = 0; i < firstDay; i++) {
-                daysContainer.innerHTML += `<div></div>`;
+                daysContainer.innerHTML += `<div class="py-1"><div class="h-8"></div></div>`;
             }
 
             // 產生日期積木
@@ -934,6 +931,10 @@
                             </div>
                         </div>`;
                 }
+            }
+            const totalCellsFilled = firstDay + daysInMonth;
+            for (let i = totalCellsFilled; i < 42; i++) {
+                daysContainer.innerHTML += `<div class="py-1"><div class="h-8"></div></div>`;
             }
         }
 
