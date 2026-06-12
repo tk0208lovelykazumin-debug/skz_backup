@@ -592,10 +592,9 @@
                 if (msg.voice && msg.voice !== "") {
                     let fileId = msg.voice.includes("id=") ? msg.voice.split("id=")[1].split("&")[0] : "";
                     
-                    // 💡 終極魔法：拿掉 export=download，改用純 id 讀取，強迫 Google 給我們影音串流而非下載附件！
                     let streamUrl = fileId ? `https://drive.google.com/uc?id=${fileId}` : msg.voice;
-                    // 保留 preview 網址作為最後防線
                     let embedUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : msg.voice;
+                    let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.voice;
 
                     let uniqueId = 'audio-' + Math.random().toString(36).substr(2, 9);
 
@@ -615,7 +614,9 @@
                                     <i id="${uniqueId}-icon" class="fas fa-play text-3xl text-sakura/80 ml-1 drop-shadow-sm"></i>
                                 </button>
                                 
-                                <span id="${uniqueId}-time" class="text-xs text-gray-400 tracking-wider font-medium mt-1">00:00</span>
+                                <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-sakura hover:bg-sakura/10 transition-all cursor-pointer" title="下載語音">
+                                    <i class="fas fa-download text-sm"></i>
+                                </a>
                             </div>
                         </div>`;
                 }
@@ -1404,7 +1405,7 @@
     </div>
     <div id="theater-modal" class="fixed inset-0 bg-black z-[9999] hidden flex-col items-center justify-center opacity-0 transition-opacity duration-300">
         
-        <button onclick="closeTheaterModal()" class="absolute top-6 right-4 text-white w-10 h-10 flex items-center justify-center text-2xl z-[10000] bg-black/40 rounded-full hover:bg-black/70 transition-colors shadow-lg">
+        <button onclick="closeTheaterModal()" class="absolute top-[50px] left-4 text-white w-10 h-10 flex items-center justify-center text-2xl z-[10000] bg-black/50 rounded-full hover:bg-black/70 transition-colors shadow-lg border border-white/20">
             <i class="fas fa-times"></i>
         </button>
 
