@@ -7,6 +7,7 @@
     <link rel="icon" href="./favicon.png" type="image/png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="referrer" content="no-referrer">
     <meta name="theme-color" content="#ffffff">
     <meta name="robots" content="noindex, nofollow">
     <title>Sakurazaka46 MSG backup</title>
@@ -411,18 +412,27 @@
             <div id="media-content-container" class="flex-1 overflow-y-auto p-4 no-scrollbar pb-24">
                 </div>
 
-            <div id="audio-player-ui" class="hidden absolute bottom-0 w-full bg-gray-50 border-t border-gray-200 p-6 pb-8 flex flex-col gap-4 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-20">
-                <div class="w-full bg-gray-200 h-1.5 rounded-full relative">
-                    <div class="absolute left-0 top-0 h-full w-0 bg-sakura rounded-full"></div>
-                    <div class="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-gray-400 rounded-full shadow"></div>
+            </div> <div id="audio-player-ui" class="hidden absolute bottom-0 left-0 w-full bg-white border-t border-gray-200 p-5 pb-8 flex flex-col gap-3 shadow-[0_-10px_20px_rgba(0,0,0,0.1)] z-[100] rounded-t-3xl transition-transform">
+            <div class="flex justify-between items-center px-1 mb-1">
+                <span class="text-xs font-bold text-gray-500 tracking-widest"><i class="fas fa-music mr-2 text-sakura"></i>語音播放中</span>
+                <button onclick="closeGlobalAudio()" class="text-gray-400 hover:text-sakura transition-colors"><i class="fas fa-times text-lg"></i></button>
+            </div>
+            
+            <div class="w-full bg-gray-200 h-1.5 rounded-full relative cursor-pointer" id="audio-progress-bg" onclick="seekAudio(event)">
+                <div id="audio-progress-bar" class="absolute left-0 top-0 h-full w-0 bg-sakura rounded-full pointer-events-none"></div>
+                <div id="audio-progress-handle" class="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white border border-gray-300 rounded-full shadow pointer-events-none transition-all"></div>
+            </div>
+            
+            <div class="flex items-center justify-between text-sakura px-2 mt-2">
+                <i class="fas fa-volume-up text-xl text-gray-300"></i>
+                <div class="w-12 h-12 bg-sakura text-white rounded-full flex items-center justify-center shadow-md cursor-pointer hover:scale-105 transition-transform" onclick="toggleAudio()">
+                    <i id="audio-play-icon" class="fas fa-play text-xl ml-1"></i>
                 </div>
-                <div class="flex items-center justify-between text-sakura px-2">
-                    <i class="fas fa-volume-up text-xl text-gray-400"></i>
-                    <i class="fas fa-play text-2xl ml-4"></i>
-                    <span class="text-xs text-gray-400 tracking-widest">--:--</span>
-                </div>
+                <span id="audio-time-display" class="text-xs text-gray-500 tracking-widest font-medium">00:00 / 00:00</span>
             </div>
         </div>
+
+    
     <script src="./messages_db.js"></script>
     <script>
         // --- 第一部分：圖庫庫 ---
@@ -557,37 +567,57 @@
                     let fileId = msg.video.includes("id=") ? msg.video.split("id=")[1].split("&")[0] : "";
                     let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.video;
                     let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : msg.video;
-                    let thumbnailUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : ""; 
-                    contentHtml += `\
-                            <div class="relative w-full flex justify-center rounded-lg overflow-hidden bg-black group cursor-pointer" onclick="window.open('${viewUrl}', '_blank')">
+                    let thumbnailUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : "";
+
+                    contentHtml += `
+                        <div class="relative w-full rounded-lg overflow-hidden bg-black shadow-md group cursor-pointer" onclick="openTheaterModal('${viewUrl}')">
+                            <div class="relative w-full" style="padding-top: 56.25%;"> 
+                                <img src="${thumbnailUrl}" class="absolute top-0 left-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="影片縮圖">
                                 
-                                
-                                <div class="relative w-full flex justify-center rounded-lg overflow-hidden bg-black group">
-                                
-                                    <iframe src="${viewUrl}" width="100%" height="260" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen loading="lazy" class="rounded-lg"></iframe>
-                                    
-                                    <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 z-10" title="下載影片">
-                                        <i class="fas fa-download text-sm"></i>
-                                    </a>
+                                <div class="absolute inset-0 flex items-center justify-center">
+                                    <div class="bg-black/60 rounded-full w-12 h-12 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                        <i class="fas fa-play text-white text-lg ml-1"></i>
+                                    </div>
                                 </div>
-                                <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 z-10" title="下載影片">
-                                    <i class="fas fa-download text-sm"></i>
-                                </a>
-                            </div>`;
+                            </div>
+                            <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" 
+                            class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/80 transition-opacity z-10" title="下載影片">
+                                <i class="fas fa-download text-sm"></i>
+                            </a>
+                        </div>`;
                 }
 
-                // 🌟 第三塊積木：語音
+                
+                // 🌟 第三塊積木：語音 (完美原生播放器 + 串流網址破解)
                 if (msg.voice && msg.voice !== "") {
                     let fileId = msg.voice.includes("id=") ? msg.voice.split("id=")[1].split("&")[0] : "";
-                    let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.voice;
-                    let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.voice;
+                    
+                    // 💡 終極魔法：拿掉 export=download，改用純 id 讀取，強迫 Google 給我們影音串流而非下載附件！
+                    let streamUrl = fileId ? `https://drive.google.com/uc?id=${fileId}` : msg.voice;
+                    // 保留 preview 網址作為最後防線
+                    let embedUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : msg.voice;
+
+                    let uniqueId = 'audio-' + Math.random().toString(36).substr(2, 9);
+
                     contentHtml += `
-                            <div class="text-sm text-sakura font-bold flex items-center gap-2"onclick="window.open('${viewUrl}', '_blank')">
-                                <div class="bg-sakura text-white rounded-full w-8 h-8 flex items-center justify-center shrink-0">
-                                    <i class="fas fa-phone-alt text-[12px]"></i>
-                                </div>
-                                播放電話語音
-                            </div>`;
+                        <div class="w-full flex flex-col gap-3 py-1 mt-1 px-1">
+                            <video id="${uniqueId}-audio" src="${streamUrl}" preload="metadata" style="display:none;" onloadedmetadata="initInlineAudio('${uniqueId}')" ontimeupdate="updateInlineProgress('${uniqueId}')" onended="resetInlineAudio('${uniqueId}')"></video>
+
+                            <div class="w-full bg-sakura/20 h-1.5 rounded-full relative cursor-pointer" onclick="seekInlineAudio(event, '${uniqueId}')">
+                                <div id="${uniqueId}-progress" class="absolute left-0 top-0 h-full w-0 bg-sakura rounded-full pointer-events-none"></div>
+                                <div id="${uniqueId}-handle" class="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-sakura rounded-full shadow pointer-events-none transition-all"></div>
+                            </div>
+
+                            <div class="flex items-center justify-between px-1 mt-1">
+                                <i class="fas fa-volume-up text-sakura opacity-60 text-lg"></i>
+                                
+                                <button onclick="toggleInlineAudio('${uniqueId}', '${embedUrl}')" class="flex items-center justify-center outline-none hover:scale-110 transition-transform active:scale-95">
+                                    <i id="${uniqueId}-icon" class="fas fa-play text-3xl text-sakura/80 ml-1 drop-shadow-sm"></i>
+                                </button>
+                                
+                                <span id="${uniqueId}-time" class="text-xs text-gray-400 tracking-wider font-medium mt-1">00:00</span>
+                            </div>
+                        </div>`;
                 }
 
                 // 🌟 第四塊積木：文字 (自動疊在最下面)
@@ -606,7 +636,10 @@
                                     <span class="text-[10px] text-gray-500">${msg.year}/${msg.time}</span>
                                 </div>
                             </div>
-                            <div class="bg-chatbg rounded-xl rounded-tl-sm p-3 block shadow-sm w-[330px]"> ${contentHtml}
+                            <div class="bg-chatbg rounded-xl rounded-tl-sm p-3 block shadow-sm w-[330px]">
+                                <div class="w-full">
+                                    ${contentHtml}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -816,12 +849,12 @@
                     groupedData[groupTitle].forEach(msg => {
                         let fileId = msg.voice.includes("id=") ? msg.voice.split("id=")[1].split("&")[0] : "";
                         let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.voice;
-                        
+                        let dlUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.voice;
                         // 用它自帶的真實年份組裝日期
                         let fullDate = `${msg.year}/${msg.time}`; 
                         
                         let html = `
-                            <div class="audio-list-item" onclick="window.open('${viewUrl}', '_blank')">
+                           <div class="audio-list-item hover:bg-sakura/5 transition-colors cursor-pointer" onclick="playGlobalAudio('${dlUrl}')">
                                 <div class="flex items-center gap-3">
                                     <div class="relative">
                                         <img src="${sender.avatar}" class="w-10 h-10 rounded-full object-cover border border-gray-100">
@@ -829,9 +862,10 @@
                                     </div>
                                     <span class="text-sm font-medium text-gray-700">${sender.name}</span>
                                 </div>
+                                
                                 <div class="text-right">
                                     <div class="text-xs text-gray-500 mb-1">${fullDate}</div>
-                                    <div class="text-xs text-gray-400 tracking-widest">--:--</div>
+                                    <div class="text-xs text-sakura tracking-widest"><i class="fas fa-play mr-1"></i>播放</div>
                                 </div>
                             </div>
                         `;
@@ -1095,7 +1129,221 @@
             
             chatContainer.innerHTML = fullHtml;
         });
-         
+        // ==========================================
+        // 🎬 全螢幕劇院控制功能 (完全獨立，不干擾圖片)
+        // ==========================================
+        function openTheaterModal(viewUrl) {
+            const modal = document.getElementById('theater-modal');
+            const container = document.getElementById('theater-container');
+            
+            modal.classList.remove('hidden');
+            
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+            }, 10);
+            
+            container.innerHTML = `
+                <iframe src="${viewUrl}" 
+                        class="w-full h-full border-0" 
+                        frameborder="0" 
+                        allow="autoplay; encrypted-media" 
+                        allowfullscreen>
+                </iframe>
+            `;
+        }
+
+        function closeTheaterModal() {
+            const modal = document.getElementById('theater-modal');
+            const container = document.getElementById('theater-container');
+            
+            modal.classList.add('opacity-0');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                container.innerHTML = ''; 
+            }, 300);
+        }
+        // ==========================================
+        // 🎵 全域音樂播放器核心系統
+        // ==========================================
+        const globalAudio = new Audio();
+        let isDragging = false;
+
+        function playGlobalAudio(url) {
+            const ui = document.getElementById('audio-player-ui');
+            const playIcon = document.getElementById('audio-play-icon');
+            
+            ui.classList.remove('hidden'); // 秀出播放器
+            
+            // 如果點擊的是正在播放的同一首歌，就當作暫停/播放切換
+            if(globalAudio.src === url) {
+                toggleAudio();
+                return;
+            }
+
+            // 載入新音檔並播放
+            globalAudio.src = url;
+            globalAudio.play();
+            playIcon.classList.remove('fa-play');
+            playIcon.classList.add('fa-pause');
+            playIcon.classList.remove('ml-1'); // 暫停鍵不需要微調置中
+        }
+
+        function toggleAudio() {
+            const playIcon = document.getElementById('audio-play-icon');
+            if (globalAudio.paused) {
+                globalAudio.play();
+                playIcon.classList.replace('fa-play', 'fa-pause');
+                playIcon.classList.remove('ml-1');
+            } else {
+                globalAudio.pause();
+                playIcon.classList.replace('fa-pause', 'fa-play');
+                playIcon.classList.add('ml-1');
+            }
+        }
+
+        // 時間格式化工具 (將秒數轉為 01:23)
+        function formatTime(seconds) {
+            if (isNaN(seconds)) return "00:00";
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        // 監聽播放進度，即時更新進度條與文字
+        globalAudio.addEventListener('timeupdate', () => {
+            if (isDragging) return; // 如果使用者正在拖曳，先不要自動更新
+            
+            const progress = document.getElementById('audio-progress-bar');
+            const handle = document.getElementById('audio-progress-handle');
+            const timeDisplay = document.getElementById('audio-time-display');
+            
+            if (globalAudio.duration) {
+                const percent = (globalAudio.currentTime / globalAudio.duration) * 100;
+                progress.style.width = `${percent}%`;
+                handle.style.left = `${percent}%`;
+                timeDisplay.innerText = `${formatTime(globalAudio.currentTime)} / ${formatTime(globalAudio.duration)}`;
+            }
+        });
+
+        // 點擊進度條跳轉功能
+        function seekAudio(event) {
+            if (!globalAudio.duration) return;
+            const bg = document.getElementById('audio-progress-bg');
+            const rect = bg.getBoundingClientRect();
+            const clickX = event.clientX - rect.left;
+            const percent = Math.max(0, Math.min(1, clickX / rect.width));
+            
+            globalAudio.currentTime = percent * globalAudio.duration;
+        }
+
+        // 播放結束時自動恢復為 Play 按鈕
+        globalAudio.addEventListener('ended', () => {
+            const playIcon = document.getElementById('audio-play-icon');
+            playIcon.classList.replace('fa-pause', 'fa-play');
+            playIcon.classList.add('ml-1');
+            document.getElementById('audio-progress-bar').style.width = '0%';
+            document.getElementById('audio-progress-handle').style.left = '0%';
+        }); 
+
+        // 關閉播放器介面並停止播放
+        function closeGlobalAudio() {
+            globalAudio.pause();
+            document.getElementById('audio-player-ui').classList.add('hidden');
+        }
+        // ==========================================
+        // 🎵 聊天室專屬：內嵌式語音播放器系統
+        // ==========================================
+        let currentInlineAudio = null;
+        let currentInlinePlayIcon = null;
+
+        function toggleInlineAudio(id, fallbackEmbedUrl) {
+            const audio = document.getElementById(id + '-audio');
+            const icon = document.getElementById(id + '-icon');
+
+            if (!audio) return;
+
+            if (currentInlineAudio && currentInlineAudio !== audio) {
+                currentInlineAudio.pause();
+                if (currentInlinePlayIcon) {
+                    currentInlinePlayIcon.classList.replace('fa-pause', 'fa-play');
+                    currentInlinePlayIcon.classList.add('ml-1');
+                }
+            }
+
+            if (audio.paused) {
+                audio.play().then(() => {
+                    icon.classList.replace('fa-play', 'fa-pause');
+                    icon.classList.remove('ml-1');
+                    currentInlineAudio = audio;
+                    currentInlinePlayIcon = icon;
+                }).catch(e => {
+                    console.error("播放失敗:", e);
+                    // 💡 如果還是被 Google 擋下，我們不開新分頁了！直接叫出我們的全螢幕劇院
+                    openTheaterModal(fallbackEmbedUrl);
+                });
+            } else {
+                audio.pause();
+                icon.classList.replace('fa-pause', 'fa-play');
+                icon.classList.add('ml-1');
+            }
+        }
+
+        // 即時更新氣泡內的進度條與秒數
+        function updateInlineProgress(id) {
+            const audio = document.getElementById(id + '-audio');
+            const progress = document.getElementById(id + '-progress');
+            const handle = document.getElementById(id + '-handle');
+            const timeDisplay = document.getElementById(id + '-time');
+
+            if (!audio || !audio.duration) return;
+
+            const percent = (audio.currentTime / audio.duration) * 100;
+            if(progress) progress.style.width = `${percent}%`;
+            if(handle) handle.style.left = `${percent}%`;
+
+            if(timeDisplay) {
+                timeDisplay.innerText = formatTime(audio.currentTime) + ' / ' + formatTime(audio.duration);
+            }
+        }
+
+        // 點擊進度條跳轉功能
+        function seekInlineAudio(event, id) {
+            const audio = document.getElementById(id + '-audio');
+            if (!audio || !audio.duration) return;
+
+            const bg = event.currentTarget;
+            const rect = bg.getBoundingClientRect();
+            const clickX = event.clientX - rect.left;
+            const percent = Math.max(0, Math.min(1, clickX / rect.width));
+
+            audio.currentTime = percent * audio.duration;
+        }
+
+        // 播放完畢自動重置
+        function resetInlineAudio(id) {
+            const icon = document.getElementById(id + '-icon');
+            const progress = document.getElementById(id + '-progress');
+            const handle = document.getElementById(id + '-handle');
+            const audio = document.getElementById(id + '-audio');
+
+            if(icon) {
+                icon.classList.replace('fa-pause', 'fa-play');
+                icon.classList.add('ml-1');
+            }
+            if(progress) progress.style.width = '0%';
+            if(handle) handle.style.left = '0%';
+            if(audio) audio.currentTime = 0;
+        }
+
+        // 載入完成時，預先顯示語音的總長度
+        function initInlineAudio(id) {
+            const audio = document.getElementById(id + '-audio');
+            const timeDisplay = document.getElementById(id + '-time');
+            if (audio && audio.duration && timeDisplay) {
+                timeDisplay.innerText = "00:00 / " + formatTime(audio.duration);
+            }
+        }
     </script>
     <div id="media-modal" onclick="closeMediaModal()">
         <button id="modal-close-btn">&times;</button>
@@ -1140,6 +1388,15 @@
                 <button onclick="saveNickname()" class="px-4 py-2 bg-pink-500 text-white rounded-xl hover:bg-pink-600 transition-colors shadow-sm">儲存設定</button>
             </div>
         </div>
+    </div>
+    <div id="theater-modal" class="fixed inset-0 bg-black/95 z-[9999] hidden flex-col items-center justify-center opacity-0 transition-opacity duration-300">
+        
+        <button onclick="closeTheaterModal()" class="absolute top-4 right-4 text-white/70 hover:text-sakura w-12 h-12 flex items-center justify-center text-3xl z-50 transition-colors">
+            <i class="fas fa-times"></i>
+        </button>
+
+        <div id="theater-container" class="w-full max-w-5xl h-[80vh] md:h-[90vh] bg-black rounded-lg overflow-hidden relative shadow-2xl">
+            </div>
     </div>
 </body>
 </html>
