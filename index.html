@@ -817,11 +817,11 @@
                             let imgUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : fileUrl;
                             html += `<div class="media-grid-item" onclick="viewMediaFull('${fileUrl}', 'image')"><img src="${imgUrl}" loading="lazy"></div>`;
                         } else if(tabType === 'video') {
-                            let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : fileUrl;
+                            let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : fileUrl;
                             let thumbUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : "";
                             html += `
-                                <div class="media-grid-item" onclick="window.open('${viewUrl}', '_blank')">
-                                    <img src="${thumbUrl}" loading="lazy">
+                                <div class="media-grid-item" onclick="openTheaterModal('${viewUrl}')">
+                                    <img src="${thumbUrl}" loading="lazy" onerror="this.src='https://placehold.co/500x500/f3f4f6/c1c7d0?text=Video'">
                                     <div class="absolute inset-0 flex items-center justify-center"><i class="fas fa-play text-white/80 text-2xl drop-shadow-md"></i></div>
                                 </div>`;
                         }
@@ -848,13 +848,14 @@
                     
                     groupedData[groupTitle].forEach(msg => {
                         let fileId = msg.voice.includes("id=") ? msg.voice.split("id=")[1].split("&")[0] : "";
-                        let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/view` : msg.voice;
+                        let streamUrl = fileId ? `https://drive.google.com/uc?id=${fileId}` : msg.voice;
+                        let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : msg.voice;
                         let dlUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.voice;
                         // 用它自帶的真實年份組裝日期
                         let fullDate = `${msg.year}/${msg.time}`; 
                         
                         let html = `
-                           <div class="audio-list-item hover:bg-sakura/5 transition-colors cursor-pointer" onclick="playGlobalAudio('${dlUrl}')">
+                           <div class="audio-list-item hover:bg-sakura/5 transition-colors cursor-pointer" onclick="playGlobalAudio('${streamUrl}', '${viewUrl}')">
                                 <div class="flex items-center gap-3">
                                     <div class="relative">
                                         <img src="${sender.avatar}" class="w-10 h-10 rounded-full object-cover border border-gray-100">
@@ -1166,35 +1167,47 @@
         // ==========================================
         // 🎵 全域音樂播放器核心系統
         // ==========================================
-        const globalAudio = new Audio();
+        const globalAudio = document.createElement('video');
         let isDragging = false;
+        let currentFallbackEmbedUrl = ''; // 記住目前的防呆網址
 
-        function playGlobalAudio(url) {
+        function playGlobalAudio(streamUrl, fallbackEmbedUrl) {
             const ui = document.getElementById('audio-player-ui');
             const playIcon = document.getElementById('audio-play-icon');
             
-            ui.classList.remove('hidden'); // 秀出播放器
+            ui.classList.remove('hidden'); 
+            currentFallbackEmbedUrl = fallbackEmbedUrl; // 把防呆網址存起來
             
-            // 如果點擊的是正在播放的同一首歌，就當作暫停/播放切換
-            if(globalAudio.src === url) {
+            if(globalAudio.src === streamUrl) {
                 toggleAudio();
                 return;
             }
 
-            // 載入新音檔並播放
-            globalAudio.src = url;
-            globalAudio.play();
-            playIcon.classList.remove('fa-play');
-            playIcon.classList.add('fa-pause');
-            playIcon.classList.remove('ml-1'); // 暫停鍵不需要微調置中
+            globalAudio.src = streamUrl;
+            
+            // 加上 Promise 錯誤捕捉 (跟內嵌版一樣的防呆機制)
+            globalAudio.play().then(() => {
+                playIcon.classList.remove('fa-play');
+                playIcon.classList.add('fa-pause');
+                playIcon.classList.remove('ml-1');
+            }).catch(e => {
+                console.error("全域播放失敗:", e);
+                // 播放失敗時，自動關閉底部播放器，並叫出全螢幕劇院！
+                closeGlobalAudio();
+                openTheaterModal(currentFallbackEmbedUrl);
+            });
         }
 
         function toggleAudio() {
             const playIcon = document.getElementById('audio-play-icon');
             if (globalAudio.paused) {
-                globalAudio.play();
-                playIcon.classList.replace('fa-play', 'fa-pause');
-                playIcon.classList.remove('ml-1');
+                globalAudio.play().then(() => {
+                    playIcon.classList.replace('fa-play', 'fa-pause');
+                    playIcon.classList.remove('ml-1');
+                }).catch(e => {
+                    closeGlobalAudio();
+                    openTheaterModal(currentFallbackEmbedUrl);
+                });
             } else {
                 globalAudio.pause();
                 playIcon.classList.replace('fa-pause', 'fa-play');
@@ -1389,13 +1402,13 @@
             </div>
         </div>
     </div>
-    <div id="theater-modal" class="fixed inset-0 bg-black/95 z-[9999] hidden flex-col items-center justify-center opacity-0 transition-opacity duration-300">
+    <div id="theater-modal" class="fixed inset-0 bg-black z-[9999] hidden flex-col items-center justify-center opacity-0 transition-opacity duration-300">
         
-        <button onclick="closeTheaterModal()" class="absolute top-4 right-4 text-white/70 hover:text-sakura w-12 h-12 flex items-center justify-center text-3xl z-50 transition-colors">
+        <button onclick="closeTheaterModal()" class="absolute top-6 right-4 text-white w-10 h-10 flex items-center justify-center text-2xl z-[10000] bg-black/40 rounded-full hover:bg-black/70 transition-colors shadow-lg">
             <i class="fas fa-times"></i>
         </button>
 
-        <div id="theater-container" class="w-full max-w-5xl h-[80vh] md:h-[90vh] bg-black rounded-lg overflow-hidden relative shadow-2xl">
+        <div id="theater-container" class="w-full h-full bg-black relative flex items-center justify-center">
             </div>
     </div>
 </body>
