@@ -587,7 +587,7 @@
                 }
 
                 
-                // 🌟 第二塊積木：影片 (加入實體按壓回饋版)
+                // 🌟 第二塊積木：影片 (加入 ontouchstart 喚醒手機版按壓特效)
                 if (msg.video && msg.video !== "") {
                     let fileId = msg.video.includes("id=") ? msg.video.split("id=")[1].split("&")[0] : "";
                     let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.video;
@@ -595,7 +595,7 @@
                     let thumbnailUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : "";
 
                     contentHtml += `
-                        <div class="relative w-full rounded-lg overflow-hidden bg-black shadow-md group cursor-pointer active:scale-[0.98] transition-transform duration-100" onclick="openTheaterModal('${viewUrl}')">
+                        <div class="relative w-full rounded-lg overflow-hidden bg-black shadow-md group cursor-pointer active:scale-[0.98] transition-transform duration-100" onclick="openTheaterModal('${viewUrl}')" ontouchstart="">
                             <div class="relative w-full" style="padding-top: 56.25%;"> 
                                 <img src="${thumbnailUrl}" class="absolute top-0 left-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="影片縮圖">
                                 
@@ -607,7 +607,7 @@
                             </div>
                             
                             <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" 
-                            class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/80 active:scale-90 transition-all z-10" title="下載影片">
+                            class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/80 active:scale-90 transition-all z-10" title="下載影片" ontouchstart="">
                                 <i class="fas fa-download text-sm"></i>
                             </a>
                         </div>`;
