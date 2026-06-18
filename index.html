@@ -13,7 +13,7 @@
     <title>Sakurazaka46 MSG backup</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="SKZ_MSG_backup">
+    <meta name="apple-mobile-web-app-title" content="SAKAMICHI_MSG_backup">
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="apple-touch-icon" href="https://sakurazaka46.com/files/14/s46/img/about/about-logo.svg">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -49,7 +49,8 @@
             theme: {
                 extend: {
                     colors: {
-                        sakura: '#da82a1',     
+                        sakura: '#da82a1',
+                        nogipurple: '#9e3eb2',     
                         chatbg: '#f6f6f6',     
                         appbg: '#ffffff',      
                     },
@@ -62,35 +63,54 @@
         // 🔒 真・軍規級解碼邏輯
         // 注意：這裡「完全沒有」寫上你的密碼，密碼只存在你的腦袋裡！
 
+        // 🔒 真・軍規級雙重解碼邏輯 (一次打開櫻坂與乃木坂保險箱！)
         function unlockDatabase(password) {
             try {
-                // 1. 把輸入的文字，轉換成開鎖用的金鑰
+                // 1. 把輸入的密碼轉換成萬能金鑰
                 const key = CryptoJS.SHA256(password);
+                let unlockedAny = false; // 紀錄有沒有成功打開任何一個
                 
-                // 2. 讀取 Python 加密過的亂碼
-                const ciphertextWords = CryptoJS.enc.Base64.parse(ENCRYPTED_DB);
+                // --- 🌸 嘗試解鎖櫻坂46保險箱 ---
+                if (typeof ENCRYPTED_DB !== 'undefined') {
+                    const wordsSakura = CryptoJS.enc.Base64.parse(ENCRYPTED_DB);
+                    const ivSakura = CryptoJS.lib.WordArray.create(wordsSakura.words.slice(0, 4));
+                    const cipherSakura = CryptoJS.lib.WordArray.create(wordsSakura.words.slice(4), wordsSakura.sigBytes - 16);
+                    
+                    const decryptedSakura = CryptoJS.AES.decrypt({ ciphertext: cipherSakura }, key, {
+                        iv: ivSakura, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7
+                    });
+                    
+                    const strSakura = decryptedSakura.toString(CryptoJS.enc.Utf8);
+                    if (strSakura) {
+                        window.MESSAGES_DB = new Function("return " + strSakura)();
+                        unlockedAny = true;
+                    }
+                }
+
+                // --- 💜 嘗試解鎖乃木坂46保險箱 ---
+                if (typeof NOGI_ENCRYPTED_DB !== 'undefined') {
+                    const wordsNogi = CryptoJS.enc.Base64.parse(NOGI_ENCRYPTED_DB);
+                    const ivNogi = CryptoJS.lib.WordArray.create(wordsNogi.words.slice(0, 4));
+                    const cipherNogi = CryptoJS.lib.WordArray.create(wordsNogi.words.slice(4), wordsNogi.sigBytes - 16);
+                    
+                    const decryptedNogi = CryptoJS.AES.decrypt({ ciphertext: cipherNogi }, key, {
+                        iv: ivNogi, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7
+                    });
+                    
+                    const strNogi = decryptedNogi.toString(CryptoJS.enc.Utf8);
+                    if (strNogi) {
+                        // 🌟 關鍵！把乃木坂的資料存進專屬的腦區！
+                        window.NOGI_MESSAGES_DB = new Function("return " + strNogi)();
+                        unlockedAny = true;
+                    }
+                }
+
+                // 如果兩個保險箱都打不開，就代表密碼錯了
+                if (!unlockedAny) throw new Error("密碼錯誤，保險箱無動於衷！");
                 
-                // 3. 把前 16 bytes 拆出來當作 IV (擾亂碼)
-                const iv = CryptoJS.lib.WordArray.create(ciphertextWords.words.slice(0, 4));
-                // 4. 剩下的才是真正的鎖死內容
-                const ciphertext = CryptoJS.lib.WordArray.create(ciphertextWords.words.slice(4), ciphertextWords.sigBytes - 16);
-                
-                // 5. 暴力開鎖！
-                const decrypted = CryptoJS.AES.decrypt({ ciphertext: ciphertext }, key, {
-                    iv: iv,
-                    mode: CryptoJS.mode.CBC,
-                    padding: CryptoJS.pad.Pkcs7
-                });
-                
-                // 6. 把解碼後的內容轉回文字 (如果密碼錯了，這裡會直接失敗)
-                const decryptedStr = decrypted.toString(CryptoJS.enc.Utf8);
-                if (!decryptedStr) throw new Error("密碼錯誤，解不開保險箱");
-                
-                // 7. 成功解鎖！把資料塞進網站大腦
-                window.MESSAGES_DB = new Function("return " + decryptedStr)();
                 return true; 
             } catch(e) {
-                console.error("解鎖失敗，可能是密碼錯誤！");
+                console.error("解鎖失敗，可能是密碼錯誤！", e);
                 return false; 
             }
         }
@@ -318,9 +338,21 @@
         <!-- ========================================== -->
         <div id="list-screen" class="absolute inset-0 flex flex-col screen-transition active-screen z-10 bg-white">
             
-           <header class="pt-12 pb-3 px-4 flex items-center justify-center border-b border-sakura/30">
-                <h1 class="text-sakura text-lg font-medium tracking-widest">トーク</h1>
-                <div class="flex items-center gap-2">
+           <!-- 🌟 重新設計的首頁標題列：極簡還原版 (點擊標題即可切換團體) -->
+           <header id="main-header" class="pt-12 pb-3 px-4 flex flex-col items-center justify-center border-b border-sakura/30 relative transition-colors duration-300 w-full bg-white z-20">
+                
+                <!-- 隱藏的按鈕：現在只是一串字，點擊觸發選單 -->
+                <button id="main-group-btn" onclick="toggleGroupDropdown(event)" class="flex items-center justify-center w-full transition-opacity hover:opacity-70 active:scale-95">
+                    <h1 id="main-group-title" class="text-sakura text-base font-bold tracking-widest">トーク</h1>
+                </button>
+                
+                <div id="group-dropdown-menu" class="hidden absolute top-[calc(100%+0.5rem)] left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-xl border border-gray-100 w-48 z-50 overflow-hidden transform origin-top transition-all">
+                    <button onclick="switchGroup('sakura')" class="w-full text-left px-5 py-3.5 text-sm text-gray-700 hover:bg-pink-50 hover:text-sakura flex items-center gap-3 border-b border-gray-50 transition-colors">
+                        櫻坂46
+                    </button>
+                    <button onclick="switchGroup('nogi')" class="w-full text-left px-5 py-3.5 text-sm text-gray-700 hover:bg-purple-50 hover:text-nogipurple flex items-center gap-3 transition-colors">
+                        乃木坂46
+                    </button>
                 </div>
             </header>
 
@@ -354,43 +386,39 @@
            
 
         </header>
-<div id="search-bar-container" class="hidden bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-2 shadow-sm shrink-0 z-10 transition-all">
-            <div class="flex-1 relative">
-                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-                <input type="text" id="search-input" placeholder="搜尋訊息..." class="w-full bg-gray-100 rounded-full py-1.5 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-sakura/50">
-            </div>
-            <button onclick="closeSearch()" class="text-gray-500 text-sm whitespace-nowrap px-2">取消</button>
-        </div>
-        
-        <div id="dropdown-menu" class="hidden absolute top-14 right-4 bg-white rounded-lg shadow-xl border border-gray-100 w-48 z-50 overflow-hidden">
-            <button onclick="openSearch()" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 border-b border-gray-50 transition-colors">
-                <i class="fas fa-search text-sakura w-4 text-center"></i>文字搜尋
-            </button>
-            <button onclick="openMediaGallery()" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 border-b border-gray-50 transition-colors">
-                <i class="fas fa-th text-sakura w-4 text-center"></i><span id="media-btn-text">媒體一覽</span>
-            </button>
-            <button onclick="openDatePicker()" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors">
-                <i class="far fa-calendar-alt text-sakura w-4 text-center"></i>日期搜尋
-            </button>
-        </div>
+                <div id="search-bar-container" class="hidden bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-2 shadow-sm shrink-0 z-10 transition-all">
+                        <div class="flex-1 relative">
+                            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                            <input type="text" id="search-input" placeholder="搜尋訊息..." class="w-full bg-gray-100 rounded-full py-1.5 pl-9 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-sakura/50">
+                        </div>
+                        <button onclick="closeSearch()" class="text-gray-500 text-sm whitespace-nowrap px-2">取消</button>
+                    </div>
+                    
+                    <div id="dropdown-menu" class="hidden absolute top-14 right-4 bg-white rounded-lg shadow-xl border border-gray-100 w-48 z-50 overflow-hidden">
+                        <button onclick="openSearch()" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 border-b border-gray-50 transition-colors">
+                            <i class="fas fa-search text-sakura w-4 text-center"></i>文字搜尋
+                        </button>
+                        <button onclick="openMediaGallery()" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 border-b border-gray-50 transition-colors">
+                            <i class="fas fa-th text-sakura w-4 text-center"></i><span id="media-btn-text">媒體一覽</span>
+                        </button>
+                        <button onclick="openDatePicker()" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors">
+                            <i class="far fa-calendar-alt text-sakura w-4 text-center"></i>日期搜尋
+                        </button>
+                    </div>
 
-        <div id="chat-container" class="flex-1 overflow-y-auto p-2 pt-4 pb-10 w-full relative">
-            </div>
+                    <div id="chat-container" class="flex-1 overflow-y-auto p-2 pt-4 pb-10 w-full relative">
+                        </div>
 
-        <div id="month-nav-buttons" class="absolute bottom-8 right-4 flex flex-col gap-3 z-[90]">
-            <button onclick="jumpMonth('up')" class="w-11 h-11 bg-white/90 text-sakura rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.1)] border border-pink-100 flex items-center justify-center hover:bg-sakura hover:text-white transition-all active:scale-95" title="上個月">
-                <i class="fas fa-chevron-up text-lg"></i>
-            </button>
-            <button onclick="jumpMonth('down')" class="w-11 h-11 bg-white/90 text-sakura rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.1)] border border-pink-100 flex items-center justify-center hover:bg-sakura hover:text-white transition-all active:scale-95" title="下個月">
-                <i class="fas fa-chevron-down text-lg"></i>
-            </button>
-        </div>
-        
-    </div> ```
-
-存檔重整後，點進去聊天室，右下角絕對會穩穩地浮出這兩個漂亮的跳躍按鈕了！快去體驗看看一鍵瞬間移動的滑順感吧！😎
-
-            
+                    <div id="month-nav-buttons" class="absolute bottom-8 right-4 flex flex-col gap-3 z-[90]">
+                        <button onclick="jumpMonth('up')" class="w-11 h-11 bg-white/90 text-sakura rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.1)] border border-pink-100 flex items-center justify-center hover:bg-sakura hover:text-white transition-all active:scale-95" title="上個月">
+                            <i class="fas fa-chevron-up text-lg"></i>
+                        </button>
+                        <button onclick="jumpMonth('down')" class="w-11 h-11 bg-white/90 text-sakura rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.1)] border border-pink-100 flex items-center justify-center hover:bg-sakura hover:text-white transition-all active:scale-95" title="下個月">
+                            <i class="fas fa-chevron-down text-lg"></i>
+                        </button>
+                    </div>
+                    
+                </div>             
         </div>
     </div>
 <div id="media-screen" class="hidden absolute inset-0 z-30 bg-white flex flex-col w-full h-full max-w-md mx-auto">            
@@ -398,10 +426,8 @@
                 <button onclick="closeMediaGallery()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-50 transition-colors">
                     <i class="fas fa-chevron-left text-sakura text-lg"></i>
                 </button>
-                <h1 class="text-sakura text-sm font-bold">メディア一覧</h1>
-                <button class="w-8 h-8 flex items-center justify-center text-sakura">
-                    <i class="far fa-calendar-alt text-lg"></i>
-                </button>
+                <h1 class="text-sakura text-sm font-bold items-center">メディア一覧</h1>
+                <div class="w-8 h-8"></div>
             </header>
 
             <div class="flex border-b border-gray-200 shrink-0 bg-white">
@@ -419,29 +445,61 @@
             <div id="media-content-container" class="flex-1 overflow-y-auto p-4 no-scrollbar pb-24">
                 </div>
 
-            </div> <div id="audio-player-ui" class="hidden absolute bottom-0 left-0 w-full bg-white border-t border-gray-200 p-5 pb-8 flex flex-col gap-3 shadow-[0_-10px_20px_rgba(0,0,0,0.1)] z-[100] rounded-t-3xl transition-transform">
-            <div class="flex justify-between items-center px-1 mb-1">
-                <span class="text-xs font-bold text-gray-500 tracking-widest"><i class="fas fa-music mr-2 text-sakura"></i>語音播放中</span>
-                <button onclick="closeGlobalAudio()" class="text-gray-400 hover:text-sakura transition-colors"><i class="fas fa-times text-lg"></i></button>
             </div>
             
-            <div class="w-full bg-gray-200 h-1.5 rounded-full relative cursor-pointer" id="audio-progress-bg" onclick="seekAudio(event)">
-                <div id="audio-progress-bar" class="absolute left-0 top-0 h-full w-0 bg-sakura rounded-full pointer-events-none"></div>
-                <div id="audio-progress-handle" class="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white border border-gray-300 rounded-full shadow pointer-events-none transition-all"></div>
-            </div>
             
-            <div class="flex items-center justify-between text-sakura px-2 mt-2">
-                <i class="fas fa-volume-up text-xl text-gray-300"></i>
-                <div class="w-12 h-12 bg-sakura text-white rounded-full flex items-center justify-center shadow-md cursor-pointer hover:scale-105 transition-transform" onclick="toggleAudio()">
-                    <i id="audio-play-icon" class="fas fa-play text-xl ml-1"></i>
-                </div>
-                <span id="audio-time-display" class="text-xs text-gray-500 tracking-widest font-medium">00:00 / 00:00</span>
-            </div>
-        </div>
 
     
     <script src="./messages_db.js"></script>
+    <script src="./nogi_db.js"></script>
+    
     <script>
+// --- 💜 乃木坂46 專屬名單資料庫 (聊天室頭貼用：放 Google Drive 連結) ---
+        const NOGI_MEMBER_DB = {
+            "ichinose": { name: "一ノ瀬 美空", avatar: "https://drive.google.com/thumbnail?id=1WvdKzgZxrB_WkSyfvHxQlrputf1v73zQ" },
+            "ogawa": { name: "小川 彩", avatar: "https://drive.google.com/thumbnail?id=1TrvE8qMX1CqOxy4kxSMDxMpmo8F5xO8K" },
+            "kawasaki": { name: "川﨑 桜", avatar: "https://drive.google.com/thumbnail?id=1uiPay1Wi1djeOq69re2ttiMxtsXJ9wVR" },
+            "nakanishi": { name: "中西 アルノ", avatar: "https://drive.google.com/thumbnail?id=1l5x_cSLmHeLQ9u9LCVvpwr1i4eLqUFH4" },
+            "ioki": { name: "五百城 茉央", avatar: "https://drive.google.com/thumbnail?id=1gGw2H5SFS3G198n3_G7M3HlGYIWKppiY" },
+            "inoue": { name: "井上 和", avatar: "https://drive.google.com/thumbnail?id=10kV8osEnVvolbdJxV1aydBE6EMB4g_Is" },
+            "tamura_m": { name: "田村 真佑", avatar: "https://drive.google.com/thumbnail?id=1Si1VCt4JUMHZmowLSFZ8XwUB8lBy_uRm" },
+            "ikeda": { name: "池田 瑛紗", avatar: "https://drive.google.com/thumbnail?id=1vwotZ0fRXT5cBJrRfd0GY8e2p9CSYD1W" },
+            "okamoto": { name: "岡本 姫奈", avatar: "https://drive.google.com/thumbnail?id=1Lgo0_N-HccsC8OqG0ztFW0GSEbUcJysf" },
+            "iwamoto": { name: "岩本 蓮加", avatar: "https://drive.google.com/thumbnail?id=1uZ9tykMSKWyKzSki7DmMGOn5L73CYTOw" },
+            "umibe": { name: "海邉 朱莉", avatar: "https://drive.google.com/thumbnail?id=1g8_dTNhfGMktVSYviGCFvu-QNqOdfSct" },
+            "tomisato": { name: "冨里 奈央", avatar: "https://drive.google.com/thumbnail?id=1x3O0Jdf_BUCPL70qPj-VIs8eZk7pbT_2" },
+            "okuda": { name: "奥田 いろは", avatar: "https://drive.google.com/thumbnail?id=1FpfTG2XsQR-TBmS3EjK-XaNYfc1qz_pI" },
+            "morihira": { name: "森平 麗心", avatar: "https://drive.google.com/thumbnail?id=1Ab4fNlpdy8ou63-UWLM9TfCfX-t8ORKf" },
+            "sugawara": { name: "菅原 咲月", avatar: "https://drive.google.com/thumbnail?id=1tMjGxmMaXtD513Uu7nT-zyM0QRrtiF-D" },
+            "atago": { name: "愛宕 心響", avatar: "https://drive.google.com/thumbnail?id=1UgsNQuJRbpHbU8MLkS1_CIOEAdcSj1P0" },
+            "endo_s": { name: "遠藤 さくら", avatar: "https://drive.google.com/thumbnail?id=1j7aYYYgqdo-wRmt--rP0ox1FLfTD3wUe" },
+            "setoguchi": { name: "瀬戸口 心月", avatar: "https://drive.google.com/thumbnail?id=14CN9feRLHMrzdYy2-kqFQjjAdlKxojft" },
+            "oshirase": { name: "乃木坂46 お知らせ", avatar: "https://www.nogizaka46.com/images/46/1da/15a33d161e226121d659375d7a8cb.png" }
+        };
+
+        // --- 💜 乃木坂46 首頁列表 (九宮格顯示用：放乃木坂官方網站連結) ---
+        const NOGI_ROOM_LIST = [
+            { id: "ichinose", title: "一ノ瀬 美空", thumbnail: "https://www.nogizaka46.com/images/46/d21/1d87f2203680137df7346b7551ed0.jpg" },
+            { id: "ogawa", title: "小川 彩", thumbnail: "https://www.nogizaka46.com/images/46/e8f/d4b6b2c5802a42f04de0b62f4ab7f.jpg" },
+            { id: "kawasaki", title: "川﨑 桜", thumbnail: "https://www.nogizaka46.com/images/46/b4e/2a4faecdf5e257fa5e8aae4672f82.jpg" },
+            { id: "nakanishi", title: "中西 アルノ", thumbnail: "https://www.nogizaka46.com/images/46/605/fde6153cac131c43a2e8e0ac0bfcb.jpg" },
+            { id: "ioki", title: "五百城 茉央", thumbnail: "https://www.nogizaka46.com/images/46/ec1/9c670b4ade367a2f551f26eef4450.jpg" },
+            { id: "inoue", title: "井上 和", thumbnail: "https://www.nogizaka46.com/images/46/540/61c907a38e56dced12a57ab544fd3.jpg" },
+            { id: "tamura_m", title: "田村 真佑", thumbnail: "https://www.nogizaka46.com/images/46/4b1/dbd952eb8141c36fae23b5b3b6098.jpg" },
+            { id: "ikeda", title: "池田 瑛紗", thumbnail: "https://www.nogizaka46.com/images/46/3cd/248094368f7aab375f1900195098a.jpg" },
+            { id: "okamoto", title: "岡本 姫奈", thumbnail: "https://www.nogizaka46.com/images/46/0b4/6e7b29737ae59929b3b5d54901df9.jpg" },
+            { id: "iwamoto", title: "岩本 蓮加", thumbnail: "https://www.nogizaka46.com/images/46/4a8/fa2fc4b3c75b9568ce9adbc16d4bd.jpg" },
+            { id: "umibe", title: "海邉 朱莉", thumbnail: "https://www.nogizaka46.com/images/46/9f0/a5e7a663deb87b228ebded01540be.jpg" },
+            { id: "tomisato", title: "冨里 奈央", thumbnail: "https://www.nogizaka46.com/images/46/e27/66bd6c894d1a96288bb9dfaf8809f.jpg" },
+            { id: "okuda", title: "奥田 いろは", thumbnail: "https://www.nogizaka46.com/images/46/c2f/3eeaa463de1b7c93ce62b62270ec8.jpg" },
+            { id: "morihira", title: "森平 麗心", thumbnail: "https://www.nogizaka46.com/images/46/035/aca8b6dccc829b810d24d6fbfc7c3.jpg" },
+            { id: "sugawara", title: "菅原 咲月", thumbnail: "https://www.nogizaka46.com/images/46/c09/dfacda505809637c8214da8a8432f.jpg" },
+            { id: "atago", title: "愛宕 心響", thumbnail: "https://www.nogizaka46.com/images/46/abd/4779c6d304e1c50c16d3f08e6e818.jpg" },
+            { id: "endo_s", title: "遠藤 さくら", thumbnail: "https://www.nogizaka46.com/images/46/d90/5ca63b14dde51e680517af2216408.jpg" },
+            { id: "setoguchi", title: "瀬戸口 心月", thumbnail: "https://www.nogizaka46.com/images/46/4b1/dbd952eb8141c36fae23b5b3b6098.jpg" },
+            { id: "oshirase", title: "乃木坂46 お知らせ", thumbnail: NOGI_MEMBER_DB["oshirase"].avatar }
+        ];
+    
         // --- 第一部分：圖庫庫 ---
         const MEMBER_DB = {
             "ozono": { name: "大園 玲", avatar: "https://drive.google.com/thumbnail?id=1_F9z4C6izT4xDX5IByOt7ESVbZnbmSVf" },
@@ -507,69 +565,129 @@
 
 
         let currentMemberId = ''; // 🌟 記住現在是誰的房間
+        let currentGroup = 'sakura'; // 🌟 記住現在是哪個團體 (預設櫻坂)
+
         const listScreen = document.getElementById('list-screen');
         const chatScreen = document.getElementById('chat-screen');
         const chatContainer = document.getElementById('chat-container');
         const chatTitle = document.getElementById('chat-title');
-        const formatText = (text) => text.replace(/\n/g, '<br>');
 
-        // 1. 渲染無分類列表
+        // ==========================================
+        // 🌟 團體切換魔法
+        // ==========================================
+        function toggleGroupDropdown(event) {
+            event.stopPropagation();
+            document.getElementById('group-dropdown-menu').classList.toggle('hidden');
+        }
+
+        function switchGroup(group) {
+            currentGroup = group;
+            document.getElementById('group-dropdown-menu').classList.add('hidden'); // 收起選單
+            
+            const titleEl = document.getElementById('main-group-title');
+            const headerEl = document.getElementById('main-header'); 
+
+            // 💡 根據團體，徹底改變 Header 的長相！
+            if (group === 'sakura') {
+                // 🌸 櫻坂模式：白底、粉字、顯示「トーク」 (還原圖四)
+                titleEl.innerText = 'トーク';
+                titleEl.className = 'text-sakura text-base font-bold tracking-widest';
+                headerEl.className = 'pt-12 pb-3 px-4 flex flex-col items-center justify-center border-b border-sakura/30 relative transition-colors duration-300 w-full bg-white z-20';
+            } else {
+                // 💜 乃木坂模式：全紫底、白字、顯示「トーク」 (還原圖三)
+                titleEl.innerText = 'トーク'; 
+                titleEl.className = 'text-nogipurple text-base font-bold tracking-widest';
+                headerEl.className = 'pt-12 pb-3 px-4 flex flex-col items-center justify-center border-b border-sakura/30 relative transition-colors duration-300 w-full bg-white z-20';
+            }
+            
+            // 重新生出對應團體的九宮格！
+            initList(); 
+        }
+        // 點擊旁邊空白處，自動收起團體選單
+        document.addEventListener('click', function(event) {
+            const groupMenu = document.getElementById('group-dropdown-menu');
+            const mainTitle = document.getElementById('main-group-title');
+            if (groupMenu && !groupMenu.classList.contains('hidden') && !groupMenu.contains(event.target) && event.target !== mainTitle) {
+                groupMenu.classList.add('hidden');
+            }
+        });
+
+        // 1. 渲染無分類列表 (升級版：支援雙團體切換)
         function initList() {
             const grid = document.getElementById('room-grid');
             grid.innerHTML = '';
-            ROOM_LIST.forEach(room => {
+            
+            // 💡 判斷現在是哪個團體，拿出對應的名單抽屜
+            const activeList = (currentGroup === 'sakura') ? ROOM_LIST : NOGI_ROOM_LIST;
+            
+            activeList.forEach(room => {
                 const displayTitle = room.title.length > 10 ? room.title.substring(0, 10) + '...' : room.title;
+                
+                // 💡 根據團體，連成員名字的顏色都一起換掉！
+                const titleColorClass = (currentGroup === 'sakura') ? 'text-sakura' : 'text-nogipurple';
+                
                 const html = `
                     <div class="flex flex-col items-center gap-2 cursor-pointer hover:opacity-80 transition" onclick="openChat('${room.id}', '${room.title}')">
                         <img src="${room.thumbnail}" alt="${room.title}" class="w-[72px] h-[72px] rounded-full object-cover shadow-sm border border-gray-100">
-                        <span class="text-[10px] text-sakura text-center w-full truncate px-1">${displayTitle}</span>
+                        <span class="text-[10px] ${titleColorClass} text-center w-full truncate px-1">${displayTitle}</span>
                     </div>
                 `;
                 grid.insertAdjacentHTML('beforeend', html);
             });
+
+            // 設定暱稱按鈕 (外觀也要跟著團體變色！)
             const settingBtn = document.createElement('button');
-                settingBtn.className = 'flex flex-col items-center gap-3 transition-transform active:scale-95 group';
-                settingBtn.onclick = openNicknameModal;
-                settingBtn.innerHTML = `
-                    <div class="relative">
-                        <div class="w-[72px] h-[72px] rounded-full overflow-hidden border-4 border-white shadow-md group-hover:border-pink-200 transition-colors bg-pink-50 flex justify-center items-center" style="min-width: 72px; min-height: 72px; width: 72px; height: 72px;">
-                            <i class="fas fa-user-edit text-3xl text-pink-300 group-hover:text-pink-400 transition-colors"></i>
-                        </div>
+            settingBtn.className = 'flex flex-col items-center gap-3 transition-transform active:scale-95 group';
+            settingBtn.onclick = openNicknameModal;
+            
+            const btnBgClass = (currentGroup === 'sakura') ? 'bg-pink-50 border-white group-hover:border-pink-200' : 'bg-purple-50 border-white group-hover:border-purple-200';
+            const btnIconClass = (currentGroup === 'sakura') ? 'text-pink-300 group-hover:text-pink-400' : 'text-purple-300 group-hover:text-purple-400';
+            const btnTextClass = (currentGroup === 'sakura') ? 'group-hover:text-pink-500' : 'group-hover:text-purple-500';
+
+            settingBtn.innerHTML = `
+                <div class="relative">
+                    <div class="w-[72px] h-[72px] rounded-full overflow-hidden border-4 shadow-md transition-colors flex justify-center items-center ${btnBgClass}" style="min-width: 72px; min-height: 72px; width: 72px; height: 72px;">
+                        <i class="fas fa-user-edit text-3xl transition-colors ${btnIconClass}"></i>
                     </div>
-                    <span class="text-[10px] font-medium text-gray-600 group-hover:text-pink-500 transition-colors">設定暱稱</span>
-                `;
-                grid.appendChild(settingBtn);
+                </div>
+                <span class="text-[10px] font-medium text-gray-600 transition-colors ${btnTextClass}">設定暱稱</span>
+            `;
+            grid.appendChild(settingBtn);
         }
 
-
-        
-        // 2. 打開聊天室 (加入懶加載技術)
+        // 2. 打開聊天室 (支援動態切換資料庫)
         function openChat(roomId, title) {
-            currentMemberId = roomId; // 🌟 每次點進去，先把名字存起來！
-            const messages = MESSAGES_DB[roomId] || [];
+            currentMemberId = roomId; 
+            
+            // 💡 動態選擇要用哪個團體的資料庫！
+            const activeMemberDB = (currentGroup === 'sakura') ? MEMBER_DB : NOGI_MEMBER_DB;
+            const activeMessagesDB = (currentGroup === 'sakura') ? (window.MESSAGES_DB || {}) : (window.NOGI_MESSAGES_DB || {});
+            
+            const messages = activeMessagesDB[roomId] || [];
+            
             chatTitle.innerText = title;
             chatContainer.innerHTML = ''; 
             window.lastSeenMonth = "";
             let fullHtml = '';
             
-            
-            // 迴圈從這裡開始，每次抓出一則 msg
             messages.forEach(msg => {
-                
-                // 💡 月份標記魔法 (修復版)：年份在 msg.year，月份在 msg.time！
                 let rYear = msg.year || 2026;
-                // 從 "09/20 21:30" 裡面切出前面的 "09"
                 let rMonth = msg.time ? msg.time.split('/')[0] : ""; 
                 let monthKey = `${rYear}/${rMonth}`;
                 let markerClass = "";
 
                 if (window.lastSeenMonth !== monthKey && rMonth !== "") {
-                    // scroll-mt-24 是為了讓它跳轉時往下推一點，避開上方的標題列
                     markerClass = "month-marker scroll-mt-24"; 
                     window.lastSeenMonth = monthKey;
                 }
 
-                const sender = MEMBER_DB[msg.senderId] || { name: "System", avatar: "https://placehold.co/150x150" };
+                // 💡 動態抓取對應團體的大頭貼
+                const sender = activeMemberDB[msg.senderId] || { name: "System", avatar: "https://placehold.co/150x150" };
+
+                let highResAvatar = sender.avatar;
+                if (highResAvatar.includes("drive.google.com/thumbnail") && !highResAvatar.includes("sz=")) {
+                    highResAvatar += "&sz=w1000";
+                }
                 let contentHtml = '';
 
                 // 🌟 第一塊積木：圖片
@@ -587,7 +705,7 @@
                 }
 
                 
-                // 🌟 第二塊積木：影片 (加入 ontouchstart 喚醒手機版按壓特效)
+                // 🌟 第二塊積木：影片
                 if (msg.video && msg.video !== "") {
                     let fileId = msg.video.includes("id=") ? msg.video.split("id=")[1].split("&")[0] : "";
                     let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.video;
@@ -613,7 +731,7 @@
                         </div>`;
                 }
                 
-                // 🌟 第三塊積木：語音 (完美原生播放器 + 串流網址破解)
+                // 🌟 第三塊積木：語音
                 if (msg.voice && msg.voice !== "") {
                     let fileId = msg.voice.includes("id=") ? msg.voice.split("id=")[1].split("&")[0] : "";
                     
@@ -623,30 +741,35 @@
 
                     let uniqueId = 'audio-' + Math.random().toString(36).substr(2, 9);
 
+                    // 💡 語音進度條顏色也要跟著換
+                    const audioColorClass = (currentGroup === 'sakura') ? 'bg-sakura' : 'bg-purple-500';
+                    const audioIconColor = (currentGroup === 'sakura') ? 'text-sakura/80' : 'text-purple-600/80';
+                    const audioSubColor = (currentGroup === 'sakura') ? 'text-sakura hover:bg-sakura/10' : 'text-purple-500 hover:bg-purple-500/10';
+
                     contentHtml += `
                         <div class="w-full flex flex-col gap-3 py-1 mt-1 px-1">
                             <video id="${uniqueId}-audio" src="${streamUrl}" preload="metadata" style="display:none;" onloadedmetadata="initInlineAudio('${uniqueId}')" ontimeupdate="updateInlineProgress('${uniqueId}')" onended="resetInlineAudio('${uniqueId}')"></video>
 
-                            <div class="w-full bg-sakura/20 h-1.5 rounded-full relative cursor-pointer" onclick="seekInlineAudio(event, '${uniqueId}')">
-                                <div id="${uniqueId}-progress" class="absolute left-0 top-0 h-full w-0 bg-sakura rounded-full pointer-events-none"></div>
-                                <div id="${uniqueId}-handle" class="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-sakura rounded-full shadow pointer-events-none transition-all"></div>
+                            <div class="w-full bg-gray-200 h-1.5 rounded-full relative cursor-pointer" onclick="seekInlineAudio(event, '${uniqueId}')">
+                                <div id="${uniqueId}-progress" class="absolute left-0 top-0 h-full w-0 ${audioColorClass} rounded-full pointer-events-none"></div>
+                                <div id="${uniqueId}-handle" class="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-3 ${audioColorClass} rounded-full shadow pointer-events-none transition-all"></div>
                             </div>
 
                             <div class="flex items-center justify-between px-1 mt-1">
-                                <i class="fas fa-volume-up text-sakura opacity-60 text-lg"></i>
+                                <i class="fas fa-volume-up opacity-60 text-lg ${audioSubColor.split(' ')[0]}"></i>
                                 
                                 <button onclick="toggleInlineAudio('${uniqueId}', '${embedUrl}')" class="flex items-center justify-center outline-none hover:scale-110 transition-transform active:scale-95">
-                                    <i id="${uniqueId}-icon" class="fas fa-play text-3xl text-sakura/80 ml-1 drop-shadow-sm"></i>
+                                    <i id="${uniqueId}-icon" class="fas fa-play text-3xl ml-1 drop-shadow-sm ${audioIconColor}"></i>
                                 </button>
                                 
-                                <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-sakura hover:bg-sakura/10 transition-all cursor-pointer" title="下載語音">
+                                <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 transition-all cursor-pointer ${audioSubColor}" title="下載語音">
                                     <i class="fas fa-download text-sm"></i>
                                 </a>
                             </div>
                         </div>`;
                 }
 
-                // 🌟 第四塊積木：文字 (自動疊在最下面)
+                // 🌟 第四塊積木：文字
                 if (msg.text && msg.text !== "") {
                     const displayContent = msg.text.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
                     contentHtml += `<p class="whitespace-pre-wrap leading-relaxed break-all">${displayContent}</p>`;
@@ -654,14 +777,16 @@
 
                 fullHtml += `
                     <div class="flex gap-3 mb-6 ${markerClass}">
-                        <img src="${sender.avatar}" loading="lazy" class="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0">
-                        <div class="flex-1 min-w-0 pr-8">
+                        <img src="${sender.avatar}" loading="lazy" onclick="viewMediaFull('${highResAvatar}', 'image')" class="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0 cursor-pointer hover:opacity-80 transition-opacity active:scale-95">
+                        
+                        <div class="flex-1 min-w-0">
                             <div class="flex items-center justify-between mb-1">
                                 <div class="flex items-baseline gap-3">
                                     <span class="text-xs text-gray-700 font-bold">${sender.name}</span>
                                     <span class="text-[10px] text-gray-500">${msg.year}/${msg.time}</span>
                                 </div>
                             </div>
+                            
                             <div class="bg-chatbg rounded-xl rounded-tl-sm p-3 block shadow-sm w-[330px]">
                                 <div class="w-full">
                                     ${contentHtml}
@@ -671,14 +796,20 @@
                     </div>
                 `;
             });
+            
+            // 處理如果沒有訊息的防呆畫面
+            if (messages.length === 0) {
+                 fullHtml = `<div class="flex items-center justify-center h-full text-gray-400 text-sm mt-20">目前還沒有訊息資料唷！</div>`;
+            }
+
             chatContainer.innerHTML = fullHtml;
 
-            // 執行畫面切換動畫
             listScreen.classList.replace('active-screen', 'slide-out-left');
             chatScreen.classList.replace('slide-in-right', 'active-screen');
             
             document.getElementById('month-nav-buttons').classList.remove('hidden');
-        
+
+            applyThemeColors();
         }
 
         // 3. 返回列表頁並執行「記憶體大掃除」
@@ -782,17 +913,22 @@
             ['image', 'video', 'audio'].forEach(t => {
                 const btn = document.getElementById(`tab-${t}`);
                 if (!btn) return;
+                
                 if(t === tabType) {
+                    // 被選中的按鈕：拔掉灰色，加上粉色 (變色魔法稍後會自動把粉色轉成紫色)
                     btn.classList.remove('text-gray-300', 'border-transparent');
                     btn.classList.add('text-sakura', 'border-sakura');
                 } else {
-                    btn.classList.remove('text-sakura', 'border-sakura');
+                    // 💡 沒被選中的按鈕：把「櫻坂粉」跟「乃木紫」通通拔掉！換回灰色
+                    btn.classList.remove('text-sakura', 'border-sakura', 'text-nogipurple', 'border-nogipurple');
                     btn.classList.add('text-gray-300', 'border-transparent');
                 }
             });
 
             // 2. 抓取目前成員的媒體，並過濾出當前分頁的類型 (image/video/audio)
-            const msgs = (typeof MESSAGES_DB !== 'undefined' && MESSAGES_DB[currentMemberId]) ? MESSAGES_DB[currentMemberId] : [];
+            // 💡 修復：動態判斷要從櫻坂還是乃木坂的資料庫拿資料！
+            const activeMessagesDB = (currentGroup === 'sakura') ? (window.MESSAGES_DB || {}) : (window.NOGI_MESSAGES_DB || {});
+            const msgs = activeMessagesDB[currentMemberId] || [];
             const targetMsgs = msgs.filter(m => {
                 if (tabType === 'image') return m.picture && m.picture !== '';
                 if (tabType === 'video') return m.video && m.video !== '';
@@ -863,8 +999,9 @@
             } else if (tabType === 'audio') {
                 // 如果是語音，秀出底層播放器 UI
                 if (audioPlayer) audioPlayer.classList.remove('hidden');
-                
-                const sender = MEMBER_DB[currentMemberId] || { name: "Member", avatar: "" };
+                // 💡 修復：動態判斷要抓哪一團的成員大頭貼！
+                const activeMemberDB = (currentGroup === 'sakura') ? MEMBER_DB : NOGI_MEMBER_DB;
+                const sender = activeMemberDB[currentMemberId] || { name: "Member", avatar: "" };
                 const sortedKeys = Object.keys(groupedData).sort();
 
                 if (sortedKeys.length === 0) {
@@ -904,6 +1041,7 @@
                     });
                 });
             }
+            applyThemeColors();
         }
 
  // ==========================================
@@ -960,7 +1098,8 @@
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             
             // 🌟 1. 直接抓取資料庫
-            const msgs = (typeof MESSAGES_DB !== 'undefined' && MESSAGES_DB[currentMemberId]) ? MESSAGES_DB[currentMemberId] : [];
+            const activeMessagesDB = (currentGroup === 'sakura') ? (window.MESSAGES_DB || {}) : (window.NOGI_MESSAGES_DB || {});
+            const msgs = activeMessagesDB[currentMemberId] || [];
             const activeDates = new Set();
             
             msgs.forEach(m => {
@@ -1003,6 +1142,7 @@
             for (let i = totalCellsFilled; i < 42; i++) {
                 daysContainer.innerHTML += `<div class="py-1"><div class="h-8"></div></div>`;
             }
+            applyThemeColors();
         }
 
         // 🎯 點擊日期後的防彈跳轉魔法
@@ -1115,8 +1255,10 @@
                 return;
             }
 
-            // 安全抓取該成員的資料
-            const msgs = (typeof MESSAGES_DB !== 'undefined' ? MESSAGES_DB[currentMemberId] : []) || [];
+            // 💡 刪除舊的：const msgs = MESSAGES_DB[currentMemberId];
+            // 💡 替換成下面這兩行「變色龍大腦」：
+            const activeMessagesDB = (currentGroup === 'sakura') ? (window.MESSAGES_DB || {}) : (window.NOGI_MESSAGES_DB || {});
+            const msgs = activeMessagesDB[currentMemberId] || [];
             
             const filteredMsgs = msgs.filter(msg => 
                 msg.text && msg.text.toLowerCase().includes(keyword)
@@ -1128,8 +1270,9 @@
                 return;
             }
 
-            // 🌟 致命 Bug 修復：這裡原本寫錯成 memberData，現在改回你正確的 MEMBER_DB！
-            const sender = MEMBER_DB[currentMemberId] || { name: "System", avatar: "" };
+            
+            const activeMemberDB = (currentGroup === 'sakura') ? MEMBER_DB : NOGI_MEMBER_DB;
+            const sender = activeMemberDB[currentMemberId] || { name: 'System', avatar: 'assets/default_avatar.png' };
             let fullHtml = '';
             
             filteredMsgs.forEach(msg => {
@@ -1159,6 +1302,7 @@
             });
             
             chatContainer.innerHTML = fullHtml;
+            applyThemeColors();
         });
         // ==========================================
         // 🎬 全螢幕劇院控制功能 (完全獨立，不干擾圖片)
@@ -1403,6 +1547,46 @@
             if (audio && audio.duration && timeDisplay) {
                 timeDisplay.innerText = "00:00 / " + formatTime(audio.duration);
             }
+        }
+        // ==========================================
+        // 🎨 變色龍主題系統 (內頁白底粉字 / 白底紫字 自動切換)
+        // ==========================================
+        function applyThemeColors() {
+            // 抓出所有會彈出來的「內頁」
+            const screens = [
+                document.getElementById('chat-screen'),
+                document.getElementById('media-screen'),
+                document.getElementById('date-picker-modal'),
+                document.getElementById('audio-player-ui')
+            ];
+            
+            screens.forEach(container => {
+                if (!container) return;
+                
+                // 找出所有身上帶有櫻坂粉、乃木紫相關 class 的元素
+                const elements = container.querySelectorAll('[class*="sakura"], [class*="pink-"], [class*="nogipurple"], [class*="purple-"]');
+                
+                elements.forEach(el => {
+                    let cls = el.getAttribute('class');
+                    if (!cls) return;
+
+                    if (currentGroup === 'nogi') {
+                        // 💜 轉換為乃木紫模式 (白底紫字)
+                        cls = cls.replaceAll('sakura', 'nogipurple')
+                                 .replaceAll('pink-100', 'purple-200')
+                                 .replaceAll('pink-50', 'purple-50')
+                                 .replaceAll('bg-purple-500', 'bg-nogipurple')
+                                 .replaceAll('text-purple-600', 'text-nogipurple')
+                                 .replaceAll('text-purple-500', 'text-nogipurple');
+                    } else {
+                        // 🌸 轉換回櫻坂粉模式 (白底粉字)
+                        cls = cls.replaceAll('nogipurple', 'sakura')
+                                 .replaceAll('purple-200', 'pink-100')
+                                 .replaceAll('purple-50', 'pink-50');
+                    }
+                    el.setAttribute('class', cls);
+                });
+            });
         }
     </script>
     <div id="media-modal" onclick="closeMediaModal()">
