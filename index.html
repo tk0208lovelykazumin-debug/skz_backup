@@ -1163,7 +1163,8 @@
                 const chatContainer = document.getElementById('chat-container');
                 if (!chatContainer) return;
 
-                const msgs = (typeof MESSAGES_DB !== 'undefined' && MESSAGES_DB[currentMemberId]) ? MESSAGES_DB[currentMemberId] : [];
+                const activeMessagesDB = (currentGroup === 'sakura') ? (window.MESSAGES_DB || {}) : (window.NOGI_MESSAGES_DB || {});
+                const msgs = activeMessagesDB[currentMemberId] || [];
                 
                 let exactTimeStr = null;
                 let targetIndex = -1;
