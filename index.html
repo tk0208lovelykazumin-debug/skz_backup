@@ -84,6 +84,7 @@
                     if (strSakura) {
                         window.MESSAGES_DB = new Function("return " + strSakura)();
                         unlockedAny = true;
+                        window.ENCRYPTED_DB = null; // 🚀 減肥手術：解密完立刻把超肥的亂碼從記憶體刪除！
                     }
                 }
 
@@ -656,10 +657,10 @@
         }
 
         // 2. 打開聊天室 (支援動態切換資料庫)
+        // 2. 打開聊天室 (防崩潰：分批渲染版)
         function openChat(roomId, title) {
             currentMemberId = roomId; 
             
-            // 💡 動態選擇要用哪個團體的資料庫！
             const activeMemberDB = (currentGroup === 'sakura') ? MEMBER_DB : NOGI_MEMBER_DB;
             const activeMessagesDB = (currentGroup === 'sakura') ? (window.MESSAGES_DB || {}) : (window.NOGI_MESSAGES_DB || {});
             
@@ -668,152 +669,167 @@
             chatTitle.innerText = title;
             chatContainer.innerHTML = ''; 
             window.lastSeenMonth = "";
-            let fullHtml = '';
             
-            messages.forEach(msg => {
-                let rYear = msg.year || 2026;
-                let rMonth = msg.time ? msg.time.split('/')[0] : ""; 
-                let monthKey = `${rYear}/${rMonth}`;
-                let markerClass = "";
+            // 處理防呆
+            if (messages.length === 0) {
+                 chatContainer.innerHTML = `<div class="flex items-center justify-center h-full text-gray-400 text-sm mt-20">目前還沒有訊息資料唷！</div>`;
+                 listScreen.classList.replace('active-screen', 'slide-out-left');
+                 chatScreen.classList.replace('slide-in-right', 'active-screen');
+                 document.getElementById('month-nav-buttons').classList.remove('hidden');
+                 return;
+            }
 
-                if (window.lastSeenMonth !== monthKey && rMonth !== "") {
-                    markerClass = "month-marker scroll-mt-24"; 
-                    window.lastSeenMonth = monthKey;
+            // 先把畫面切換過去，給使用者流暢的感覺
+            listScreen.classList.replace('active-screen', 'slide-out-left');
+            chatScreen.classList.replace('slide-in-right', 'active-screen');
+            document.getElementById('month-nav-buttons').classList.remove('hidden');
+
+            // 🌟 核心減肥手術：分段進食法 (Batch Rendering)
+            let batchSize = 150; // 每次只處理 150 則
+            let currentIndex = 0;
+
+            function renderNextBatch() {
+                if (currentIndex >= messages.length) {
+                    // 全部渲染完畢才上色
+                    applyThemeColors();
+                    return;
                 }
 
-                // 💡 動態抓取對應團體的大頭貼
-                const sender = activeMemberDB[msg.senderId] || { name: "System", avatar: "https://placehold.co/150x150" };
+                let batchHtml = '';
+                let endIndex = Math.min(currentIndex + batchSize, messages.length);
+                
+                for (let i = currentIndex; i < endIndex; i++) {
+                    const msg = messages[i];
+                    let rYear = msg.year || 2026;
+                    let rMonth = msg.time ? msg.time.split('/')[0] : ""; 
+                    let monthKey = `${rYear}/${rMonth}`;
+                    let markerClass = "";
 
-                let highResAvatar = sender.avatar;
-                if (highResAvatar.includes("drive.google.com/thumbnail") && !highResAvatar.includes("sz=")) {
-                    highResAvatar += "&sz=w1000";
-                }
-                let contentHtml = '';
+                    if (window.lastSeenMonth !== monthKey && rMonth !== "") {
+                        markerClass = "month-marker scroll-mt-24"; 
+                        window.lastSeenMonth = monthKey;
+                    }
 
-                // 🌟 第一塊積木：圖片
-                if (msg.picture && msg.picture !== "") {
-                    let fileId = msg.picture.includes("id=") ? msg.picture.split("id=")[1].split("&")[0] : "";
-                    let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.picture;
-                    
-                    // 💡 加入 min-h-[250px] 預留空間，這樣 Lazy Loading 就不會把版面撐破！
-                    contentHtml += `
-                        <br><div class="relative w-full flex justify-center rounded-lg overflow-hidden group min-h-[250px] bg-gray-50">
-                                <img src="${msg.picture}" loading="lazy" class="max-w-full max-h-[350px] object-contain cursor-pointer rounded-md mx-auto" onclick="viewMediaFull('${msg.picture}', 'image')">
-                                
-                                <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80">
+                    const sender = activeMemberDB[msg.senderId] || { name: "System", avatar: "https://placehold.co/150x150" };
+
+                    let highResAvatar = sender.avatar;
+                    if (highResAvatar.includes("drive.google.com/thumbnail") && !highResAvatar.includes("sz=")) {
+                        highResAvatar += "&sz=w1000";
+                    }
+                    let contentHtml = '';
+
+                    // 圖片
+                    if (msg.picture && msg.picture !== "") {
+                        let fileId = msg.picture.includes("id=") ? msg.picture.split("id=")[1].split("&")[0] : "";
+                        let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.picture;
+                        contentHtml += `
+                            <br><div class="relative w-full flex justify-center rounded-lg overflow-hidden group min-h-[250px] bg-gray-50">
+                                    <img src="${msg.picture}" loading="lazy" class="max-w-full max-h-[350px] object-contain cursor-pointer rounded-md mx-auto" onclick="viewMediaFull('${msg.picture}', 'image')">
+                                    <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80">
+                                        <i class="fas fa-download text-sm"></i>
+                                    </a>
+                                </div><br>`;
+                    }
+
+                    // 影片
+                    if (msg.video && msg.video !== "") {
+                        let fileId = msg.video.includes("id=") ? msg.video.split("id=")[1].split("&")[0] : "";
+                        let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.video;
+                        let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : msg.video;
+                        let thumbnailUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : "";
+
+                        contentHtml += `
+                            <div class="relative w-full rounded-lg overflow-hidden bg-black shadow-md group cursor-pointer active:scale-[0.98] transition-transform duration-100 min-h-[200px]" onclick="openTheaterModal('${viewUrl}')" ontouchstart="">
+                                <div class="relative w-full" style="padding-top: 56.25%;"> 
+                                    <img src="${thumbnailUrl}" class="absolute top-0 left-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="影片縮圖">
+                                    <div class="absolute inset-0 flex items-center justify-center">
+                                        <div class="bg-black/60 rounded-full w-12 h-12 flex items-center justify-center shadow-lg group-hover:scale-110 active:scale-90 active:bg-sakura/90 transition-all duration-150">
+                                            <i class="fas fa-play text-white text-lg ml-1"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" 
+                                class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/80 active:scale-90 transition-all z-10" title="下載影片" ontouchstart="">
                                     <i class="fas fa-download text-sm"></i>
                                 </a>
-                            </div><br>`;
-                }
+                            </div>`;
+                    }
+                    
+                    // 語音
+                    if (msg.voice && msg.voice !== "") {
+                        let fileId = msg.voice.includes("id=") ? msg.voice.split("id=")[1].split("&")[0] : "";
+                        let streamUrl = fileId ? `https://drive.google.com/uc?id=${fileId}` : msg.voice;
+                        let embedUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : msg.voice;
+                        let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.voice;
+                        let uniqueId = 'audio-' + Math.random().toString(36).substr(2, 9);
 
-                
-                // 🌟 第二塊積木：影片
-                if (msg.video && msg.video !== "") {
-                    let fileId = msg.video.includes("id=") ? msg.video.split("id=")[1].split("&")[0] : "";
-                    let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.video;
-                    let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : msg.video;
-                    let thumbnailUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w500` : "";
+                        const isNogi = (currentGroup === 'nogi');
+                        const audioColorClass = isNogi ? 'bg-nogipurple' : 'bg-sakura';
+                        const audioIconColor = isNogi ? 'text-nogipurple/80' : 'text-sakura/80';
+                        const audioSubColor = isNogi ? 'text-nogipurple hover:bg-nogipurple/10' : 'text-sakura hover:bg-sakura/10';
 
-                    contentHtml += `
-                        <div class="relative w-full rounded-lg overflow-hidden bg-black shadow-md group cursor-pointer active:scale-[0.98] transition-transform duration-100" onclick="openTheaterModal('${viewUrl}')" ontouchstart="">
-                            <div class="relative w-full" style="padding-top: 56.25%;"> 
-                                <img src="${thumbnailUrl}" class="absolute top-0 left-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="影片縮圖">
-                                
-                                <div class="absolute inset-0 flex items-center justify-center">
-                                    <div class="bg-black/60 rounded-full w-12 h-12 flex items-center justify-center shadow-lg group-hover:scale-110 active:scale-90 active:bg-sakura/90 transition-all duration-150">
-                                        <i class="fas fa-play text-white text-lg ml-1"></i>
+                        contentHtml += `
+                            <div class="w-full flex flex-col gap-3 py-1 mt-1 px-1">
+                                <video id="${uniqueId}-audio" src="${streamUrl}" preload="metadata" style="display:none;" onloadedmetadata="initInlineAudio('${uniqueId}')" ontimeupdate="updateInlineProgress('${uniqueId}')" onended="resetInlineAudio('${uniqueId}')"></video>
+                                <div class="w-full bg-gray-200 h-1.5 rounded-full relative cursor-pointer" onclick="seekInlineAudio(event, '${uniqueId}')">
+                                    <div id="${uniqueId}-progress" class="absolute left-0 top-0 h-full w-0 ${audioColorClass} rounded-full pointer-events-none"></div>
+                                    <div id="${uniqueId}-handle" class="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-3 ${audioColorClass} rounded-full shadow pointer-events-none transition-all"></div>
+                                </div>
+                                <div class="flex items-center justify-between px-1 mt-1">
+                                    <i class="fas fa-volume-up opacity-60 text-lg ${audioSubColor.split(' ')[0]}"></i>
+                                    <button onclick="toggleInlineAudio('${uniqueId}', '${embedUrl}')" class="flex items-center justify-center outline-none hover:scale-110 transition-transform active:scale-95">
+                                        <i id="${uniqueId}-icon" class="fas fa-play text-3xl ml-1 drop-shadow-sm ${audioIconColor}"></i>
+                                    </button>
+                                    <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 transition-all cursor-pointer ${audioSubColor}" title="下載語音">
+                                        <i class="fas fa-download text-sm"></i>
+                                    </a>
+                                </div>
+                            </div>`;
+                    }
+
+                    // 文字
+                    if (msg.text && msg.text !== "") {
+                        const displayContent = msg.text.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
+                        contentHtml += `<p class="whitespace-pre-wrap leading-relaxed break-all">${displayContent}</p>`;
+                    }
+
+                    batchHtml += `
+                        <div class="flex gap-3 mb-6 ${markerClass}">
+                            <img src="${sender.avatar}" loading="lazy" onclick="viewMediaFull('${highResAvatar}', 'image')" class="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0 cursor-pointer hover:opacity-80 transition-opacity active:scale-95">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center justify-between mb-1">
+                                    <div class="flex items-baseline gap-3">
+                                        <span class="text-xs text-gray-700 font-bold">${sender.name}</span>
+                                        <span class="text-[10px] text-gray-500">${msg.year}/${msg.time}</span>
+                                    </div>
+                                </div>
+                                <div class="bg-chatbg rounded-xl rounded-tl-sm p-3 block shadow-sm w-[330px]">
+                                    <div class="w-full">
+                                        ${contentHtml}
                                     </div>
                                 </div>
                             </div>
-                            
-                            <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" 
-                            class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/80 active:scale-90 transition-all z-10" title="下載影片" ontouchstart="">
-                                <i class="fas fa-download text-sm"></i>
-                            </a>
-                        </div>`;
+                        </div>
+                    `;
                 }
                 
-                // 🌟 第三塊積木：語音
-                if (msg.voice && msg.voice !== "") {
-                    let fileId = msg.voice.includes("id=") ? msg.voice.split("id=")[1].split("&")[0] : "";
-                    
-                    let streamUrl = fileId ? `https://drive.google.com/uc?id=${fileId}` : msg.voice;
-                    let embedUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : msg.voice;
-                    let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.voice;
-
-                    let uniqueId = 'audio-' + Math.random().toString(36).substr(2, 9);
-
-                    // 💡 語音進度條顏色也要跟著換
-                    const audioColorClass = (currentGroup === 'sakura') ? 'bg-sakura' : 'bg-purple-500';
-                    const audioIconColor = (currentGroup === 'sakura') ? 'text-sakura/80' : 'text-purple-600/80';
-                    const audioSubColor = (currentGroup === 'sakura') ? 'text-sakura hover:bg-sakura/10' : 'text-purple-500 hover:bg-purple-500/10';
-
-                    contentHtml += `
-                        <div class="w-full flex flex-col gap-3 py-1 mt-1 px-1">
-                            <video id="${uniqueId}-audio" src="${streamUrl}" preload="metadata" style="display:none;" onloadedmetadata="initInlineAudio('${uniqueId}')" ontimeupdate="updateInlineProgress('${uniqueId}')" onended="resetInlineAudio('${uniqueId}')"></video>
-
-                            <div class="w-full bg-gray-200 h-1.5 rounded-full relative cursor-pointer" onclick="seekInlineAudio(event, '${uniqueId}')">
-                                <div id="${uniqueId}-progress" class="absolute left-0 top-0 h-full w-0 ${audioColorClass} rounded-full pointer-events-none"></div>
-                                <div id="${uniqueId}-handle" class="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-3 ${audioColorClass} rounded-full shadow pointer-events-none transition-all"></div>
-                            </div>
-
-                            <div class="flex items-center justify-between px-1 mt-1">
-                                <i class="fas fa-volume-up opacity-60 text-lg ${audioSubColor.split(' ')[0]}"></i>
-                                
-                                <button onclick="toggleInlineAudio('${uniqueId}', '${embedUrl}')" class="flex items-center justify-center outline-none hover:scale-110 transition-transform active:scale-95">
-                                    <i id="${uniqueId}-icon" class="fas fa-play text-3xl ml-1 drop-shadow-sm ${audioIconColor}"></i>
-                                </button>
-                                
-                                <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 transition-all cursor-pointer ${audioSubColor}" title="下載語音">
-                                    <i class="fas fa-download text-sm"></i>
-                                </a>
-                            </div>
-                        </div>`;
+                // 🌟 變色龍加速：如果是乃木坂，字串階段直接取代 (減輕 DOM 負擔)
+                if (currentGroup === 'nogi') {
+                    batchHtml = batchHtml.replaceAll('sakura', 'nogipurple')
+                                         .replaceAll('pink-100', 'purple-200')
+                                         .replaceAll('pink-50', 'purple-50');
                 }
 
-                // 🌟 第四塊積木：文字
-                if (msg.text && msg.text !== "") {
-                    const displayContent = msg.text.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
-                    contentHtml += `<p class="whitespace-pre-wrap leading-relaxed break-all">${displayContent}</p>`;
-                }
+                chatContainer.insertAdjacentHTML('beforeend', batchHtml);
+                currentIndex = endIndex;
 
-                fullHtml += `
-                    <div class="flex gap-3 mb-6 ${markerClass}">
-                        <img src="${sender.avatar}" loading="lazy" onclick="viewMediaFull('${highResAvatar}', 'image')" class="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0 cursor-pointer hover:opacity-80 transition-opacity active:scale-95">
-                        
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center justify-between mb-1">
-                                <div class="flex items-baseline gap-3">
-                                    <span class="text-xs text-gray-700 font-bold">${sender.name}</span>
-                                    <span class="text-[10px] text-gray-500">${msg.year}/${msg.time}</span>
-                                </div>
-                            </div>
-                            
-                            <div class="bg-chatbg rounded-xl rounded-tl-sm p-3 block shadow-sm w-[330px]">
-                                <div class="w-full">
-                                    ${contentHtml}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            // 處理如果沒有訊息的防呆畫面
-            if (messages.length === 0) {
-                 fullHtml = `<div class="flex items-center justify-center h-full text-gray-400 text-sm mt-20">目前還沒有訊息資料唷！</div>`;
+                // 🌟 讓手機喘息 20 毫秒再畫下一批！
+                setTimeout(renderNextBatch, 20);
             }
 
-            chatContainer.innerHTML = fullHtml;
-
-            listScreen.classList.replace('active-screen', 'slide-out-left');
-            chatScreen.classList.replace('slide-in-right', 'active-screen');
-            
-            document.getElementById('month-nav-buttons').classList.remove('hidden');
-
-            applyThemeColors();
+            // 啟動分批渲染
+            renderNextBatch();
         }
-
         // 3. 返回列表頁並執行「記憶體大掃除」
         function goBack() {
             
@@ -1215,8 +1231,8 @@
                     foundItem.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     
                     // 連續兩次鎖定，抵抗圖片載入撐開版面的反作用力！
-                    setTimeout(() => foundItem.scrollIntoView({ behavior: 'auto', block: 'start' }), 400);
-                    setTimeout(() => foundItem.scrollIntoView({ behavior: 'smooth', block: 'start' }), 800);
+                    setTimeout(() => foundItem.scrollIntoView({ behavior: 'auto', block: 'start' }), 1500);
+                    setTimeout(() => foundItem.scrollIntoView({ behavior: 'smooth', block: 'start' }), 2000);
 
                     // 閃爍提示效果
                     const bubble = foundItem.querySelector('.bg-chatbg') || foundItem.querySelector('div[class*="bg-"]');
@@ -1225,7 +1241,7 @@
                         setTimeout(() => bubble.classList.remove('!bg-sakura/30'), 1500);
                     }
                 }
-            }, 400);
+            }, 1500);
         }
         window.onload = initList;
         // ==========================================
@@ -1565,12 +1581,15 @@
         // 🎨 變色龍主題系統 (內頁白底粉字 / 白底紫字 自動切換)
         // ==========================================
         function applyThemeColors() {
-            // 抓出所有會彈出來的「內頁」
+            // 💡 精準掃描！避開裝了幾萬則訊息的 chat-container，只掃描外層的 UI 介面
             const screens = [
-                document.getElementById('chat-screen'),
-                document.getElementById('media-screen'),
-                document.getElementById('date-picker-modal'),
-                document.getElementById('audio-player-ui')
+                document.querySelector('#chat-screen header'), // 聊天室標題列
+                document.getElementById('dropdown-menu'),      // 右上角選單
+                document.getElementById('month-nav-buttons'),  // 上下月跳轉鈕
+                document.getElementById('search-bar-container'),// 搜尋列
+                document.getElementById('media-screen'),       // 媒體庫
+                document.getElementById('date-picker-modal'),  // 日曆
+                document.getElementById('audio-player-ui')     // 語音播放器
             ];
             
             screens.forEach(container => {
