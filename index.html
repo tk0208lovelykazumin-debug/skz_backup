@@ -485,7 +485,7 @@
             { id: "nakanishi", title: "中西 アルノ", thumbnail: "https://www.nogizaka46.com/images/46/605/fde6153cac131c43a2e8e0ac0bfcb.jpg" },
             { id: "ioki", title: "五百城 茉央", thumbnail: "https://www.nogizaka46.com/images/46/ec1/9c670b4ade367a2f551f26eef4450.jpg" },
             { id: "inoue", title: "井上 和", thumbnail: "https://www.nogizaka46.com/images/46/540/61c907a38e56dced12a57ab544fd3.jpg" },
-            { id: "tamura_m", title: "田村 真佑", thumbnail: "https://www.nogizaka46.com/images/46/4b1/dbd952eb8141c36fae23b5b3b6098.jpg" },
+            { id: "tamura_m", title: "田村 真佑", thumbnail: "https://www.nogizaka46.com/images/46/de5/915861e02d78a55180a5d58ea5c80.jpg" },
             { id: "ikeda", title: "池田 瑛紗", thumbnail: "https://www.nogizaka46.com/images/46/3cd/248094368f7aab375f1900195098a.jpg" },
             { id: "okamoto", title: "岡本 姫奈", thumbnail: "https://www.nogizaka46.com/images/46/0b4/6e7b29737ae59929b3b5d54901df9.jpg" },
             { id: "iwamoto", title: "岩本 蓮加", thumbnail: "https://www.nogizaka46.com/images/46/4a8/fa2fc4b3c75b9568ce9adbc16d4bd.jpg" },
@@ -597,7 +597,7 @@
                 // 💜 乃木坂模式：全紫底、白字、顯示「トーク」 (還原圖三)
                 titleEl.innerText = 'トーク'; 
                 titleEl.className = 'text-nogipurple text-base font-bold tracking-widest';
-                headerEl.className = 'pt-12 pb-3 px-4 flex flex-col items-center justify-center border-b border-sakura/30 relative transition-colors duration-300 w-full bg-white z-20';
+                headerEl.className = 'pt-12 pb-3 px-4 flex flex-col items-center justify-center border-b border-nogipurple/30 relative transition-colors duration-300 w-full bg-white z-20';
             }
             
             // 重新生出對應團體的九宮格！
@@ -694,8 +694,10 @@
                 if (msg.picture && msg.picture !== "") {
                     let fileId = msg.picture.includes("id=") ? msg.picture.split("id=")[1].split("&")[0] : "";
                     let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : msg.picture;
+                    
+                    // 💡 加入 min-h-[250px] 預留空間，這樣 Lazy Loading 就不會把版面撐破！
                     contentHtml += `
-                        <br><div class="relative w-full flex justify-center rounded-lg overflow-hidden group">
+                        <br><div class="relative w-full flex justify-center rounded-lg overflow-hidden group min-h-[250px] bg-gray-50">
                                 <img src="${msg.picture}" loading="lazy" class="max-w-full max-h-[350px] object-contain cursor-pointer rounded-md mx-auto" onclick="viewMediaFull('${msg.picture}', 'image')">
                                 
                                 <a href="${downloadUrl}" target="_blank" onclick="event.stopPropagation();" class="absolute bottom-2 right-2 bg-black/60 text-white w-8 h-8 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80">
@@ -1478,7 +1480,7 @@
         }
 
         // ==========================================
-        // 📅 快速跳月份系統
+        // 📅 快速跳月份系統 (防彈跳轉升級版)
         // ==========================================
         function jumpMonth(direction) {
             // 抓出所有貼了標籤的「每月第一則訊息」
@@ -1488,7 +1490,6 @@
             let target = null;
             
             if (direction === 'up') {
-                // 往上找：從後面找回來，找到第一個在畫面「上方」的標籤
                 for (let i = markers.length - 1; i >= 0; i--) {
                     if (markers[i].getBoundingClientRect().top < -10) { 
                         target = markers[i];
@@ -1496,8 +1497,6 @@
                     }
                 }
             } else {
-                // 往下找：從前面找下去，找到第一個在畫面「下方」的標籤
-                // > 150 是為了避開螢幕上半部已經顯示的內容
                 for (let i = 0; i < markers.length; i++) {
                     if (markers[i].getBoundingClientRect().top > 150) { 
                         target = markers[i];
@@ -1507,8 +1506,21 @@
             }
 
             if (target) {
-                // 平滑滾動到該訊息
-                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                // 💡 升級 1：先用 auto 瞬間瞬移過去，躲開所有還沒載入的圖片陷阱！
+                target.scrollIntoView({ behavior: 'auto', block: 'start' });
+                
+                // 💡 升級 2：等 0.3 秒，附近的圖片載入完畢後，再平滑地「精準校正」一次！
+                setTimeout(() => {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    
+                    // 順便加上變色龍發光特效，讓你知道跳到哪一則了
+                    const bubble = target.querySelector('.bg-chatbg') || target.querySelector('div[class*="bg-"]');
+                    if(bubble) {
+                        const glowClass = (currentGroup === 'sakura') ? '!bg-sakura/30' : '!bg-nogipurple/30';
+                        bubble.classList.add(glowClass, 'transition-colors', 'duration-700');
+                        setTimeout(() => bubble.classList.remove(glowClass), 1500);
+                    }
+                }, 300);
             }
         }
 
