@@ -788,8 +788,13 @@
                     }
 
                     // 文字
+                    // 文字
                     if (msg.text && msg.text !== "") {
-                        const displayContent = msg.text.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
+                        let displayContent = msg.text.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
+                        
+                        // 🌟 網址轉換魔法：自動把 http/https 開頭的字串變成藍色超連結！
+                        displayContent = displayContent.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-500 underline hover:opacity-80 transition-opacity" onclick="event.stopPropagation()">$1</a>');
+                        
                         contentHtml += `<p class="whitespace-pre-wrap leading-relaxed break-all">${displayContent}</p>`;
                     }
 
@@ -1295,9 +1300,17 @@
             let fullHtml = '';
             
             filteredMsgs.forEach(msg => {
-                // 用正則表達式，把關鍵字包上一層黃色背景的 HTML (螢光筆效果)
-                const displayContent = msg.text.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
-                const regex = new RegExp(`(${keyword})`, 'gi');
+                // 1. 替換暱稱
+                let displayContent = msg.text.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
+                
+                // 2. 🌟 網址轉換魔法：自動轉成藍色超連結
+                displayContent = displayContent.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-500 underline hover:opacity-80 transition-opacity" onclick="event.stopPropagation()">$1</a>');
+                
+                // 3. 用正則表達式，把關鍵字包上一層黃色背景的 HTML (螢光筆效果)
+                // 💡 防護罩 1：過濾特殊符號，避免使用者搜尋符號時當機
+                const safeKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // 💡 防護罩 2：(?![^<]*>) 是魔法指令，告訴程式「如果這個字在 HTML 標籤 < > 裡面，就不准塗色！」
+                const regex = new RegExp(`(${safeKeyword})(?![^<]*>)`, 'gi');
                 const highlightedContent = displayContent.replace(regex, `<span class="bg-yellow-200 text-yellow-800 rounded px-1">$1</span>`);
                 
                 let contentHtml = `<p class="whitespace-pre-wrap leading-relaxed break-all">${highlightedContent}</p>`;
