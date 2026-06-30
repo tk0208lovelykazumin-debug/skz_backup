@@ -787,15 +787,23 @@
                             </div>`;
                     }
 
-                    // 文字
+                    
+                    // 🌟 翻譯魔法準備：給這則訊息一個專屬 ID，並準備翻譯按鈕
+                    let textId = 'msg-' + Math.random().toString(36).substr(2, 9);
+                    let transBtnHtml = '';
+
                     // 文字
                     if (msg.text && msg.text !== "") {
                         let displayContent = msg.text.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
-                        
-                        // 🌟 網址轉換魔法：自動把 http/https 開頭的字串變成藍色超連結！
                         displayContent = displayContent.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-500 underline hover:opacity-80 transition-opacity" onclick="event.stopPropagation()">$1</a>');
                         
                         contentHtml += `<p class="whitespace-pre-wrap leading-relaxed break-all">${displayContent}</p>`;
+                        // 💡 在文字下方預留一個隱藏的「翻譯結果區塊」
+                        contentHtml += `<div id="${textId}-trans" class="hidden mt-2 pt-2 border-t border-gray-200 text-sm text-gray-600 font-medium"></div>`;
+                        
+                        // 💡 只有當這則訊息有文字時，才在標籤列加入「翻譯按鈕」
+                        const rawTextForTrans = encodeURIComponent(msg.text);
+                        transBtnHtml = `<button onclick="translateText('${textId}', '${rawTextForTrans}', this)" class="text-[10px] text-gray-400 hover:text-sakura transition-colors shrink-0"><i class="fas fa-language"></i> 翻譯</button>`;
                     }
 
                     batchHtml += `
@@ -803,11 +811,14 @@
                             <img src="${sender.avatar}" loading="lazy" onclick="viewMediaFull('${highResAvatar}', 'image')" class="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0 cursor-pointer hover:opacity-80 transition-opacity active:scale-95">
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center justify-between mb-1">
-                                    <div class="flex items-baseline gap-3">
+                                    <div class="flex items-baseline gap-2">
                                         <span class="text-xs text-gray-700 font-bold">${sender.name}</span>
                                         <span class="text-[10px] text-gray-500">${msg.year}/${msg.time}</span>
+                                        ${transBtnHtml} <!-- 💡 翻譯按鈕在這裡 -->
                                     </div>
                                 </div>
+                                
+                                <!-- 👇 這就是被我弄丟的對話泡泡和結尾標籤！ -->
                                 <div class="bg-chatbg rounded-xl rounded-tl-sm p-3 block shadow-sm w-[330px]">
                                     <div class="w-full">
                                         ${contentHtml}
@@ -1045,7 +1056,8 @@
                         let fullDate = `${msg.year}/${msg.time}`; 
                         
                         let html = `
-                           <div class="audio-list-item hover:bg-sakura/5 transition-colors cursor-pointer" onclick="playGlobalAudio('${streamUrl}', '${viewUrl}')">
+                           <!-- 💡 把 onclick 改成直接呼叫全螢幕劇院！ -->
+                           <div class="audio-list-item hover:bg-sakura/5 transition-colors cursor-pointer" onclick="openTheaterModal('${viewUrl}')">
                                 <div class="flex items-center gap-3">
                                     <div class="relative">
                                         <img src="${sender.avatar}" class="w-10 h-10 rounded-full object-cover border border-gray-100">
@@ -1632,6 +1644,59 @@
                     el.setAttribute('class', cls);
                 });
             });
+        }
+        // ==========================================
+        // 🌍 內建即時翻譯系統 (偷偷呼叫 Google API)
+        // ==========================================
+        async function translateText(targetId, encodedText, btnEl) {
+            const resultDiv = document.getElementById(targetId + '-trans');
+            if (!resultDiv) return;
+
+            // 如果這句話已經翻譯過，再按一次按鈕就會變成「收合/展開」的切換功能
+            if (resultDiv.innerHTML !== '') {
+                resultDiv.classList.toggle('hidden');
+                return;
+            }
+
+            // 把按鈕圖示變成「轉圈圈動畫」，讓使用者知道正在連線
+            const icon = btnEl.querySelector('i');
+            icon.classList.remove('fa-language');
+            icon.classList.add('fa-spinner', 'fa-spin'); 
+
+            try {
+                // 將文字解碼並替換掉暱稱
+                const rawText = decodeURIComponent(encodedText);
+                const textToTranslate = rawText.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
+                
+                // 🚀 核心：向 Google 翻譯發送請求 (sl=ja日文, tl=zh-TW繁中)
+                const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=zh-TW&dt=t&q=${encodeURIComponent(textToTranslate)}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                // Google 回傳的資料是陣列，把它們全部接起來
+                let translatedText = '';
+                data[0].forEach(item => {
+                    translatedText += item[0];
+                });
+
+                // 把翻譯結果印到畫面上，並顯示出來
+                resultDiv.innerHTML = `<p class="whitespace-pre-wrap">${translatedText}</p>`;
+                resultDiv.classList.remove('hidden');
+                
+                // 變色龍魔法支援：判斷目前是哪一團，把按鈕點亮成對應的顏色！
+                const activeColor = (currentGroup === 'nogi') ? 'text-nogipurple' : 'text-sakura';
+                btnEl.classList.add(activeColor);
+                btnEl.classList.remove('text-gray-400');
+                
+            } catch (err) {
+                console.error("翻譯失敗:", err);
+                resultDiv.innerHTML = `<span class="text-red-400 text-xs">翻譯失敗，請檢查網路連線。</span>`;
+                resultDiv.classList.remove('hidden');
+            } finally {
+                // 不論成功失敗，都把轉圈圈動畫關掉
+                icon.classList.remove('fa-spinner', 'fa-spin');
+                icon.classList.add('fa-language');
+            }
         }
     </script>
     <div id="media-modal" onclick="closeMediaModal()">
