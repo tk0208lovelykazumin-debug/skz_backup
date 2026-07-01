@@ -19,6 +19,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+
     <script>
         // 網頁初始化：從本機口袋拿出記憶的暱稱，沒有就預設為 'ファン'
         let userNickname = localStorage.getItem('skz_nickname') || '○○';
@@ -567,6 +568,29 @@
 
         let currentMemberId = ''; // 🌟 記住現在是誰的房間
         let currentGroup = 'sakura'; // 🌟 記住現在是哪個團體 (預設櫻坂)
+        // ☁️ 雲端字典存放區
+        let CLOUD_DICT = {};
+        // 💡 把你剛剛複製的「字典專用 GAS 網址」貼在這裡 👇
+        const DICT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyK50-89tER_znOJupJ2v9Tp6L_1ncVb17nPUXYcXUCWsuxcPIbUns2jGB_C9G9RM5a/exec';
+        
+        // 載入網頁時，自動去雲端把最新字典抓下來
+        // 載入網頁時，自動去雲端把最新字典抓下來
+        async function loadCloudDict() {
+            try {
+                // 直接抓取雲端字典，不需要帶入參數
+                const response = await fetch(DICT_GAS_URL + "?action=getDict"); 
+                const data = await response.json();
+                
+                // 將回傳的陣列轉為物件格式方便查找
+                CLOUD_DICT = {};
+                data.forEach(item => {
+                    CLOUD_DICT[item.jp] = item.tw;
+                });
+                console.log("字典載入成功！");
+            } catch (e) {
+                console.error("字典載入失敗:", e);
+            }
+        }
 
         const listScreen = document.getElementById('list-screen');
         const chatScreen = document.getElementById('chat-screen');
@@ -1264,7 +1288,10 @@
                 }
             }, 1500);
         }
-        window.onload = initList;
+        window.onload = () => {
+            initList();
+            loadCloudDict(); // 開機偷抓字典
+        };
         // ==========================================
         // 🌟 新增功能：即時文字搜尋與螢光筆標記
         // ==========================================
@@ -1673,73 +1700,109 @@
             "アー写": "宣傳照",
             "天ちゃん": "天醬"
         };
-
         async function translateText(targetId, encodedText, btnEl) {
-            const resultDiv = document.getElementById(targetId + '-trans');
-            if (!resultDiv) return;
+    const resultDiv = document.getElementById(targetId + '-trans');
+    if (!resultDiv) return;
 
-            if (resultDiv.innerHTML !== '') {
-                resultDiv.classList.toggle('hidden');
+    if (resultDiv.innerHTML !== '') {
+        resultDiv.classList.toggle('hidden');
+        return;
+    }
+
+    const icon = btnEl.querySelector('i');
+    icon.classList.remove('fa-language');
+    icon.classList.add('fa-spinner', 'fa-spin'); 
+
+    try {
+        const rawText = decodeURIComponent(encodedText);
+        // 1. 暱稱保護
+        let textToTranslate = rawText.replaceAll('%%%', '___MY_NAME___').replaceAll('％％％', '___MY_NAME___');
+        
+        // 2. 雲端字典保護
+        let protectedTerms = [];
+        let dictKeys = Object.keys(CLOUD_DICT);
+        dictKeys.forEach((key, index) => {
+            let regex = new RegExp(key, 'g');
+            if (textToTranslate.match(regex)) {
+                textToTranslate = textToTranslate.replace(regex, `__T${index}__`);
+                protectedTerms[index] = CLOUD_DICT[key]; 
+            }
+        });
+
+        // 3. 發送給 GAS 翻譯
+        const response = await fetch(GAS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ text: textToTranslate }) 
+        });
+        const data = await response.json();
+        
+        // 4. 還原名詞與暱稱
+        let translatedText = data.result;
+        protectedTerms.forEach((term, index) => {
+            if (term) {
+                let regexFuzzy = new RegExp(`__\\s*T${index}\\s*__`, 'gi');
+                translatedText = translatedText.replace(regexFuzzy, term);
+            }
+        });
+        translatedText = translatedText.replaceAll(/___\s*MY_NAME\s*___/gi, userNickname);
+
+        resultDiv.innerHTML = `<p class="whitespace-pre-wrap break-all">${translatedText}</p>`;
+        resultDiv.classList.remove('hidden');
+        
+    } catch (err) {
+        console.error("翻譯失敗:", err);
+        resultDiv.innerHTML = `<span class="text-red-400 text-xs">翻譯失敗。</span>`;
+        resultDiv.classList.remove('hidden');
+    } finally {
+        icon.classList.remove('fa-spinner', 'fa-spin');
+        icon.classList.add('fa-language');
+    }
+}
+        // 📖 擴充字典管理系統
+        // ==========================================
+        function openDictModal() {
+            document.getElementById('dropdown-menu').classList.add('hidden'); // 先把右上角選單收起來
+            document.getElementById('dict-modal').classList.remove('hidden');
+        }
+
+        function closeDictModal() {
+            document.getElementById('dict-modal').classList.add('hidden');
+            // 清空輸入框
+            document.getElementById('dict-jp-input').value = '';
+            document.getElementById('dict-tw-input').value = '';
+        }
+
+        async function saveDictWord() {
+            const jpWord = document.getElementById('dict-jp-input').value.trim();
+            const twWord = document.getElementById('dict-tw-input').value.trim();
+            const btnEl = event.currentTarget; // 抓到被點擊的按鈕
+
+            if (!jpWord || !twWord) {
+                alert("⚠️ 原文跟翻譯兩邊都要填寫喔！");
                 return;
             }
 
-            const icon = btnEl.querySelector('i');
-            icon.classList.remove('fa-language');
-            icon.classList.add('fa-spinner', 'fa-spin'); 
+            btnEl.innerText = "上傳中..."; // 讓按鈕變字，提示使用者正在連線
+            btnEl.classList.add('opacity-50', 'cursor-not-allowed');
 
             try {
-                const rawText = decodeURIComponent(encodedText);
-                let textToTranslate = rawText.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
-                
-                // 字典魔法：先把專有名詞保護起來
-                let protectedTerms = [];
-                let dictKeys = Object.keys(IDOL_DICT);
-                dictKeys.forEach((key, index) => {
-                    let regex = new RegExp(key, 'g');
-                    if (textToTranslate.match(regex)) {
-                        textToTranslate = textToTranslate.replace(regex, `__T${index}__`);
-                        protectedTerms[index] = IDOL_DICT[key]; 
-                    }
-                });
-
-                // 🚀 核心：向你自己的 GAS 中繼站發送 POST 請求
-                const response = await fetch(GAS_URL, {
+                // 把新單字傳送給雲端試算表
+                await fetch(DICT_GAS_URL, {
                     method: 'POST',
-                    // Google Apps Script 處理 POST 時的標準設定
-                    body: JSON.stringify({ text: textToTranslate }) 
+                    body: JSON.stringify({ jp: jpWord, tw: twWord })
                 });
                 
-                const data = await response.json();
+                // 傳送成功後，立刻把單字加進目前的記憶體裡，不用重新整理就能用
+                CLOUD_DICT[jpWord] = twWord;
                 
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-
-                let translatedText = data.result;
-
-                // 字典魔法：把保護的專有名詞還原回來
-                protectedTerms.forEach((term, index) => {
-                    if (term) {
-                        let regexFuzzy = new RegExp(`__\\s*T${index}\\s*__`, 'gi');
-                        translatedText = translatedText.replace(regexFuzzy, term);
-                    }
-                });
-
-                // 💡 加上 break-all 防止長網址破版
-                resultDiv.innerHTML = `<p class="whitespace-pre-wrap break-all">${translatedText}</p>`;
-                resultDiv.classList.remove('hidden');
-                
-                const activeColor = (currentGroup === 'nogi') ? 'text-nogipurple' : 'text-sakura';
-                btnEl.classList.add(activeColor);
-                btnEl.classList.remove('text-gray-400');
-                
-            } catch (err) {
-                console.error("翻譯失敗:", err);
-                resultDiv.innerHTML = `<span class="text-red-400 text-xs">翻譯失敗，請檢查中繼站連線。</span>`;
-                resultDiv.classList.remove('hidden');
+                alert(`✅ 雲端同步成功！\n\n「${jpWord}」以後會被自動翻成「${twWord}」囉！`);
+                closeDictModal();
+            } catch (e) {
+                alert("⚠️ 上傳失敗，請檢查網路連線。");
+                console.error(e);
             } finally {
-                icon.classList.remove('fa-spinner', 'fa-spin');
-                icon.classList.add('fa-language');
+                btnEl.innerText = "新增";
+                btnEl.classList.remove('opacity-50', 'cursor-not-allowed');
             }
         }
     </script>
