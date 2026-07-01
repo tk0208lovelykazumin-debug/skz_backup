@@ -406,6 +406,9 @@
                         <button onclick="openDatePicker()" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors">
                             <i class="far fa-calendar-alt text-sakura w-4 text-center"></i>日期搜尋
                         </button>
+                        <button onclick="openDictModal()" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors">
+                            <i class="fas fa-book text-sakura w-4 text-center"></i>管理字典
+                        </button>
                     </div>
 
                     <div id="chat-container" class="flex-1 overflow-y-auto p-2 pt-4 pb-10 w-full relative">
@@ -573,7 +576,6 @@
         // 💡 把你剛剛複製的「字典專用 GAS 網址」貼在這裡 👇
         const DICT_GAS_URL = 'https://script.google.com/macros/s/AKfycbyK50-89tER_znOJupJ2v9Tp6L_1ncVb17nPUXYcXUCWsuxcPIbUns2jGB_C9G9RM5a/exec';
         
-        // 載入網頁時，自動去雲端把最新字典抓下來
         // 載入網頁時，自動去雲端把最新字典抓下來
         async function loadCloudDict() {
             try {
@@ -1288,9 +1290,9 @@
                 }
             }, 1500);
         }
-        window.onload = () => {
-            initList();
-            loadCloudDict(); // 開機偷抓字典
+        window.onload = async () => {
+            await loadCloudDict(); // 等待字典抓完
+            initList();            // 再渲染畫面
         };
         // ==========================================
         // 🌟 新增功能：即時文字搜尋與螢光筆標記
@@ -1694,20 +1696,15 @@
         // 💡 把這裡替換成你剛剛在 GAS 複製的那串網址！
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbxVHVTUQuBBkKr3vAZ0gtJNwOtTKdPXzNwcSeG_ZCO_0PowiexI2uNWSWE2oFFt3ZdDwQ/exec';
 
-        // 💡 字典可以留著！因為高級版 Google 翻譯偶爾還是會認不得太宅的黑話
-        const IDOL_DICT = {
-            "ミーグリ": "線上見面會",
-            "アー写": "宣傳照",
-            "天ちゃん": "天醬"
-        };
+        
         async function translateText(targetId, encodedText, btnEl) {
-    const resultDiv = document.getElementById(targetId + '-trans');
-    if (!resultDiv) return;
+            const resultDiv = document.getElementById(targetId + '-trans');
+            if (!resultDiv) return;
 
-    if (resultDiv.innerHTML !== '') {
-        resultDiv.classList.toggle('hidden');
-        return;
-    }
+            if (resultDiv.innerHTML !== '') {
+                resultDiv.classList.toggle('hidden');
+                return;
+            }
 
     const icon = btnEl.querySelector('i');
     icon.classList.remove('fa-language');
@@ -1795,7 +1792,7 @@
                 // 傳送成功後，立刻把單字加進目前的記憶體裡，不用重新整理就能用
                 CLOUD_DICT[jpWord] = twWord;
                 
-                alert(`✅ 雲端同步成功！\n\n「${jpWord}」以後會被自動翻成「${twWord}」囉！`);
+                alert(`✅ 上傳成功！`);
                 closeDictModal();
             } catch (e) {
                 alert("⚠️ 上傳失敗，請檢查網路連線。");
@@ -1859,6 +1856,19 @@
         <div id="theater-container" class="w-full h-full bg-black relative flex items-center justify-center">
             </div>
     </div>
-    
+    <!-- 📖 新增詞彙視窗 -->
+    <div id="dict-modal" class="fixed inset-0 bg-black/50 z-[100] hidden flex justify-center items-center backdrop-blur-sm">
+        <div class="bg-white p-6 rounded-2xl w-80 shadow-2xl">
+            <h3 class="text-base font-bold text-gray-800 mb-4">新增翻譯字典</h3>
+            <input type="text" id="dict-jp-input" placeholder="日文原文 (例: ミーグリ)" 
+                class="w-full border border-gray-200 rounded-xl p-3 mb-2 text-sm focus:outline-none focus:border-sakura">
+            <input type="text" id="dict-tw-input" placeholder="中文翻譯 (例: 線上見面會)" 
+                class="w-full border border-gray-200 rounded-xl p-3 mb-6 text-sm focus:outline-none focus:border-sakura">
+            <div class="flex justify-end gap-2 text-sm font-medium">
+                <button onclick="closeDictModal()" class="px-4 py-2 text-gray-400 hover:bg-gray-50 rounded-xl">取消</button>
+                <button onclick="saveDictWord()" class="px-4 py-2 bg-sakura text-white rounded-xl shadow-sm hover:bg-sakura/90">新增</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
