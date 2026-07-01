@@ -1030,12 +1030,12 @@
                     container.insertAdjacentHTML('beforeend', html);
                 });
 
+            // --- 👇 從這裡開始替換 👇 ---
             } else if (tabType === 'audio') {
                 // 如果是語音，秀出底層播放器 UI
                 if (audioPlayer) audioPlayer.classList.remove('hidden');
-                // 💡 修復：動態判斷要抓哪一團的成員大頭貼！
+                
                 const activeMemberDB = (currentGroup === 'sakura') ? MEMBER_DB : NOGI_MEMBER_DB;
-                const sender = activeMemberDB[currentMemberId] || { name: "Member", avatar: "" };
                 const sortedKeys = Object.keys(groupedData).sort();
 
                 if (sortedKeys.length === 0) {
@@ -1048,6 +1048,10 @@
                     container.insertAdjacentHTML('beforeend', `<div class="month-header">${groupTitle}</div>`);
                     
                     groupedData[groupTitle].forEach(msg => {
+                        
+                        // 💡 修正 4：把發送者判斷移到迴圈內！根據每一則語音的 msg.senderId 去抓！
+                        const sender = activeMemberDB[msg.senderId] || activeMemberDB[currentMemberId] || { name: "Member", avatar: "https://placehold.co/150x150" };
+                        
                         let fileId = msg.voice.includes("id=") ? msg.voice.split("id=")[1].split("&")[0] : "";
                         let streamUrl = fileId ? `https://drive.google.com/uc?id=${fileId}` : msg.voice;
                         let viewUrl = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : msg.voice;
@@ -1056,7 +1060,6 @@
                         let fullDate = `${msg.year}/${msg.time}`; 
                         
                         let html = `
-                           <!-- 💡 把 onclick 改成直接呼叫全螢幕劇院！ -->
                            <div class="audio-list-item hover:bg-sakura/5 transition-colors cursor-pointer" onclick="openTheaterModal('${viewUrl}')">
                                 <div class="flex items-center gap-3">
                                     <div class="relative">
@@ -1077,6 +1080,7 @@
                 });
             }
             applyThemeColors();
+            // --- 👆 到這裡結束替換 👆 ---
         }
 
  // ==========================================
@@ -1307,25 +1311,34 @@
             }
 
             
+            // --- 👇 從這裡開始替換 👇 ---
             const activeMemberDB = (currentGroup === 'sakura') ? MEMBER_DB : NOGI_MEMBER_DB;
-            const sender = activeMemberDB[currentMemberId] || { name: 'System', avatar: 'assets/default_avatar.png' };
             let fullHtml = '';
             
             filteredMsgs.forEach(msg => {
+                // 💡 修正 1：群聊發送者防呆！優先抓 msg.senderId，沒有才用房間 ID
+                const sender = activeMemberDB[msg.senderId] || activeMemberDB[currentMemberId] || { name: 'System', avatar: 'https://placehold.co/150x150' };
+
                 // 1. 替換暱稱
                 let displayContent = msg.text.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
                 
-                // 2. 🌟 網址轉換魔法：自動轉成藍色超連結
+                // 2. 網址轉換魔法
                 displayContent = displayContent.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-500 underline hover:opacity-80 transition-opacity" onclick="event.stopPropagation()">$1</a>');
                 
-                // 3. 用正則表達式，把關鍵字包上一層黃色背景的 HTML (螢光筆效果)
-                // 💡 防護罩 1：過濾特殊符號，避免使用者搜尋符號時當機
+                // 3. 螢光筆標記
                 const safeKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                // 💡 防護罩 2：(?![^<]*>) 是魔法指令，告訴程式「如果這個字在 HTML 標籤 < > 裡面，就不准塗色！」
                 const regex = new RegExp(`(${safeKeyword})(?![^<]*>)`, 'gi');
                 const highlightedContent = displayContent.replace(regex, `<span class="bg-yellow-200 text-yellow-800 rounded px-1">$1</span>`);
                 
                 let contentHtml = `<p class="whitespace-pre-wrap leading-relaxed break-all">${highlightedContent}</p>`;
+                
+                // 💡 修正 2：加入翻譯結果的專屬空盒子
+                let textId = 'search-msg-' + Math.random().toString(36).substr(2, 9);
+                contentHtml += `<div id="${textId}-trans" class="hidden mt-2 pt-2 border-t border-gray-200 text-sm text-gray-600 font-medium"></div>`;
+                
+                // 💡 修正 3：加入翻譯按鈕
+                const rawTextForTrans = encodeURIComponent(msg.text);
+                const transBtnHtml = `<button onclick="translateText('${textId}', '${rawTextForTrans}', this)" class="text-[10px] text-gray-400 hover:text-sakura transition-colors shrink-0"><i class="fas fa-language"></i> 翻譯</button>`;
                 
                 fullHtml += `
                     <div class="flex items-start gap-3 w-full mb-6 relative message-item" data-type="text">
@@ -1335,6 +1348,7 @@
                                 <div class="flex items-baseline gap-3">
                                     <span class="text-xs text-gray-700 font-bold">${sender.name}</span>
                                     <span class="text-[10px] text-gray-500">${msg.time}</span>
+                                    ${transBtnHtml} <!-- 💡 翻譯按鈕出現在這！ -->
                                 </div>
                             </div>
                             <div class="bg-chatbg rounded-xl rounded-tl-sm p-3 inline-block shadow-sm max-w-full overflow-hidden">
@@ -1347,6 +1361,7 @@
             
             chatContainer.innerHTML = fullHtml;
             applyThemeColors();
+            // --- 👆 到這裡結束替換 👆 ---
         });
         // ==========================================
         // 🎬 全螢幕劇院控制功能 (完全獨立，不干擾圖片)
