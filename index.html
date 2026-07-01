@@ -791,7 +791,7 @@
                     // 🌟 翻譯魔法準備：給這則訊息一個專屬 ID，並準備翻譯按鈕
                     let textId = 'msg-' + Math.random().toString(36).substr(2, 9);
                     let transBtnHtml = '';
-
+                        
                     // 文字
                     if (msg.text && msg.text !== "") {
                         let displayContent = msg.text.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
@@ -1646,54 +1646,83 @@
             });
         }
         // ==========================================
-        // 🌍 內建即時翻譯系統 (偷偷呼叫 Google API)
+        // 🌍 內建即時翻譯系統 (GAS 私人高級中繼站版)
         // ==========================================
+        
+        // 💡 把這裡替換成你剛剛在 GAS 複製的那串網址！
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbxVHVTUQuBBkKr3vAZ0gtJNwOtTKdPXzNwcSeG_ZCO_0PowiexI2uNWSWE2oFFt3ZdDwQ/exec';
+
+        // 💡 字典可以留著！因為高級版 Google 翻譯偶爾還是會認不得太宅的黑話
+        const IDOL_DICT = {
+            "ミーグリ": "線上見面會",
+            "アー写": "宣傳照",
+            "天ちゃん": "天醬"
+        };
+
         async function translateText(targetId, encodedText, btnEl) {
             const resultDiv = document.getElementById(targetId + '-trans');
             if (!resultDiv) return;
 
-            // 如果這句話已經翻譯過，再按一次按鈕就會變成「收合/展開」的切換功能
             if (resultDiv.innerHTML !== '') {
                 resultDiv.classList.toggle('hidden');
                 return;
             }
 
-            // 把按鈕圖示變成「轉圈圈動畫」，讓使用者知道正在連線
             const icon = btnEl.querySelector('i');
             icon.classList.remove('fa-language');
             icon.classList.add('fa-spinner', 'fa-spin'); 
 
             try {
-                // 將文字解碼並替換掉暱稱
                 const rawText = decodeURIComponent(encodedText);
-                const textToTranslate = rawText.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
+                let textToTranslate = rawText.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
                 
-                // 🚀 核心：向 Google 翻譯發送請求 (sl=ja日文, tl=zh-TW繁中)
-                const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=zh-TW&dt=t&q=${encodeURIComponent(textToTranslate)}`;
-                const res = await fetch(url);
-                const data = await res.json();
-                
-                // Google 回傳的資料是陣列，把它們全部接起來
-                let translatedText = '';
-                data[0].forEach(item => {
-                    translatedText += item[0];
+                // 字典魔法：先把專有名詞保護起來
+                let protectedTerms = [];
+                let dictKeys = Object.keys(IDOL_DICT);
+                dictKeys.forEach((key, index) => {
+                    let regex = new RegExp(key, 'g');
+                    if (textToTranslate.match(regex)) {
+                        textToTranslate = textToTranslate.replace(regex, `__T${index}__`);
+                        protectedTerms[index] = IDOL_DICT[key]; 
+                    }
                 });
 
-                // 把翻譯結果印到畫面上，並顯示出來
-                resultDiv.innerHTML = `<p class="whitespace-pre-wrap">${translatedText}</p>`;
+                // 🚀 核心：向你自己的 GAS 中繼站發送 POST 請求
+                const response = await fetch(GAS_URL, {
+                    method: 'POST',
+                    // Google Apps Script 處理 POST 時的標準設定
+                    body: JSON.stringify({ text: textToTranslate }) 
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                let translatedText = data.result;
+
+                // 字典魔法：把保護的專有名詞還原回來
+                protectedTerms.forEach((term, index) => {
+                    if (term) {
+                        let regexFuzzy = new RegExp(`__\\s*T${index}\\s*__`, 'gi');
+                        translatedText = translatedText.replace(regexFuzzy, term);
+                    }
+                });
+
+                // 💡 加上 break-all 防止長網址破版
+                resultDiv.innerHTML = `<p class="whitespace-pre-wrap break-all">${translatedText}</p>`;
                 resultDiv.classList.remove('hidden');
                 
-                // 變色龍魔法支援：判斷目前是哪一團，把按鈕點亮成對應的顏色！
                 const activeColor = (currentGroup === 'nogi') ? 'text-nogipurple' : 'text-sakura';
                 btnEl.classList.add(activeColor);
                 btnEl.classList.remove('text-gray-400');
                 
             } catch (err) {
                 console.error("翻譯失敗:", err);
-                resultDiv.innerHTML = `<span class="text-red-400 text-xs">翻譯失敗，請檢查網路連線。</span>`;
+                resultDiv.innerHTML = `<span class="text-red-400 text-xs">翻譯失敗，請檢查中繼站連線。</span>`;
                 resultDiv.classList.remove('hidden');
             } finally {
-                // 不論成功失敗，都把轉圈圈動畫關掉
                 icon.classList.remove('fa-spinner', 'fa-spin');
                 icon.classList.add('fa-language');
             }
