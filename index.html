@@ -1718,13 +1718,20 @@
         // 2. 雲端字典保護
         let protectedTerms = [];
         let dictKeys = Object.keys(CLOUD_DICT);
-        dictKeys.forEach((key, index) => {
-            let regex = new RegExp(key, 'g');
-            if (textToTranslate.match(regex)) {
-                textToTranslate = textToTranslate.replace(regex, `__T${index}__`);
-                protectedTerms[index] = CLOUD_DICT[key]; 
-            }
-        });
+        // 💡 隱藏升級：把字典按照字數「由長到短」排序，避免短詞先被替換而破壞長詞！
+                dictKeys.sort((a, b) => b.length - a.length);
+
+                dictKeys.forEach((key, index) => {
+                    // 為了避免正則表達式把特殊符號搞壞，先加上防護罩
+                    const safeKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    let regex = new RegExp(safeKey, 'g');
+                    
+                    if (textToTranslate.match(regex)) {
+                        // 💡 偽裝成 T78K 這種型號，Google 絕對不敢亂刪字母！
+                        textToTranslate = textToTranslate.replace(regex, `T${index}K`);
+                        protectedTerms[index] = CLOUD_DICT[key]; 
+                    }
+                });
 
         // 3. 發送給 GAS 翻譯
         const response = await fetch(GAS_URL, {
@@ -1736,11 +1743,12 @@
         // 4. 還原名詞與暱稱
         let translatedText = data.result;
         protectedTerms.forEach((term, index) => {
-            if (term) {
-                let regexFuzzy = new RegExp(`__\\s*T${index}\\s*__`, 'gi');
-                translatedText = translatedText.replace(regexFuzzy, term);
-            }
-        });
+                    if (term) {
+                        // 💡 尋找 T78K，並容許 Google 在中間偷加空白 (例如 T 78 K)
+                        let regexFuzzy = new RegExp(`T\\s*${index}\\s*K`, 'gi');
+                        translatedText = translatedText.replace(regexFuzzy, term);
+                    }
+                });
         translatedText = translatedText.replaceAll(/___\s*MY_NAME\s*___/gi, userNickname);
 
         resultDiv.innerHTML = `<p class="whitespace-pre-wrap break-all">${translatedText}</p>`;
