@@ -514,7 +514,12 @@
             "masumoto": { name: "增本 綺良", avatar: "https://drive.google.com/thumbnail?id=1fDGNI0jLl1PBWlcIo5NJ-h1ejr9sLDsW" },
             "moriya": { name: "守屋 麗奈", avatar: "https://drive.google.com/thumbnail?id=1K_UHo-bvn_qm66OQcYTnGzBLY7iXqwMs" },
             "yamasaki": { name: "山﨑 天", avatar: "https://drive.google.com/thumbnail?id=1bSS-b8QETIMStQF1ChdXi5wlnGHHaDIR" },
-            "morita": { name: "森田 ひかる", avatar: "https://drive.google.com/thumbnail?id=1h8sWr5SVBVbWK59NYhbHz2E02PORdcHL" },
+            "morita": { name: "森田 ひかる", avatar: "https://drive.google.com/thumbnail?id=1GitI2-P_5trVFGVL89dw-v2j8qrbKkmN",
+                    avatars: [
+                    "https://drive.google.com/thumbnail?id=1GitI2-P_5trVFGVL89dw-v2j8qrbKkmN", // 最新頭貼放第一個
+                    "https://drive.google.com/thumbnail?id=1h8sWr5SVBVbWK59NYhbHz2E02PORdcHL" // 第二新的頭貼
+                     // 第三新的頭貼...以此類推
+                ] },
             "yamashita": { name: "山下 瞳月", avatar: "	https://sakurazaka46.com/images/14/3f4/d0a80251dbb05f5ff26a4cc695ea9/1000_1000_102400.jpg" },
             "taniguchi": { name: "谷口 愛季", avatar: "https://drive.google.com/thumbnail?id=11JJtPfC5ceC5PC55s3G11Adw0lWI7EN9" },
             "nakashima": { name: "中嶋 優月", avatar: "https://drive.google.com/thumbnail?id=1f7RnW6zrYVGdMJQ3dQfRX6mEGkyBACbh" },
@@ -834,7 +839,7 @@
 
                     batchHtml += `
                         <div class="flex gap-3 mb-6 ${markerClass}">
-                            <img src="${sender.avatar}" loading="lazy" onclick="viewMediaFull('${highResAvatar}', 'image')" class="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0 cursor-pointer hover:opacity-80 transition-opacity active:scale-95">
+                            <img src="${sender.avatar}" loading="lazy" onclick="viewAvatarGallery('${msg.senderId || currentMemberId}', event)" class="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0 cursor-pointer hover:opacity-80 transition-opacity active:scale-95">
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center justify-between mb-1">
                                     <div class="flex items-baseline gap-2">
@@ -1109,20 +1114,105 @@
             // --- 👆 到這裡結束替換 👆 ---
         }
 
- // ==========================================
-        // 🌟 全螢幕檢視器控制
         // ==========================================
+        // 🌟 全螢幕檢視器與歷代頭貼畫廊控制
+        // ==========================================
+        let currentGallery = [];
+        let currentGalleryIndex = 0;
+
+        // 1. 一般對話框內的圖片點擊 (不會有左右箭頭)
         function viewMediaFull(url, type) {
             const modal = document.getElementById('media-modal');
             const modalImg = document.getElementById('modal-media-content-img');
+            const prevBtn = document.getElementById('modal-prev-btn');
+            const nextBtn = document.getElementById('modal-next-btn');
+            const downloadBtn = document.getElementById('modal-download-btn');
             
+            // 隱藏畫廊箭頭
+            if(prevBtn) prevBtn.classList.add('hidden');
+            if(nextBtn) nextBtn.classList.add('hidden');
+
             modalImg.classList.add('hidden');
+            document.getElementById('modal-media-content-video').classList.add('hidden');
+            document.getElementById('modal-media-content-audio').classList.add('hidden');
             
             if (type === 'image') {
                 modalImg.src = url;
                 modalImg.classList.remove('hidden');
+                
+                // 設定下載按鈕
+                let fileId = url.includes("id=") ? url.split("id=")[1].split("&")[0] : "";
+                let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : url;
+                if(downloadBtn) {
+                    downloadBtn.href = downloadUrl;
+                    downloadBtn.classList.remove('hidden');
+                }
             }
             modal.classList.add('active');
+        }
+
+        // 2. 點擊成員大頭貼觸發的「畫廊模式」
+        function viewAvatarGallery(memberId, event) {
+            if(event) event.stopPropagation();
+            const activeMemberDB = (currentGroup === 'sakura') ? MEMBER_DB : NOGI_MEMBER_DB;
+            const sender = activeMemberDB[memberId] || activeMemberDB[currentMemberId];
+            if (!sender) return;
+
+            // 判斷該成員有沒有專屬的 avatars 陣列，沒有的話就只顯示目前這一張
+            currentGallery = sender.avatars || [sender.avatar];
+            currentGalleryIndex = 0; // 預設從第一張(最新)開始顯示
+
+            showGalleryImage(currentGalleryIndex);
+        }
+
+        // 3. 負責渲染畫廊內容的函數
+        function showGalleryImage(index) {
+            const modal = document.getElementById('media-modal');
+            const modalImg = document.getElementById('modal-media-content-img');
+            const prevBtn = document.getElementById('modal-prev-btn');
+            const nextBtn = document.getElementById('modal-next-btn');
+            const downloadBtn = document.getElementById('modal-download-btn');
+
+            let rawUrl = currentGallery[index];
+            // 把縮圖轉成高畫質 (如果有的話)
+            let highResUrl = rawUrl;
+            if (highResUrl.includes("drive.google.com/thumbnail") && !highResUrl.includes("sz=")) {
+                highResUrl += "&sz=w1000";
+            }
+            
+            modalImg.src = highResUrl;
+            modalImg.classList.remove('hidden');
+
+            // 設定下載連結
+            let fileId = rawUrl.includes("id=") ? rawUrl.split("id=")[1].split("&")[0] : "";
+            let downloadUrl = fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : rawUrl;
+            downloadBtn.href = downloadUrl;
+            downloadBtn.classList.remove('hidden');
+
+            // 如果圖片大於一張，就顯示左右箭頭
+            if (currentGallery.length > 1) {
+                prevBtn.classList.remove('hidden');
+                nextBtn.classList.remove('hidden');
+            } else {
+                prevBtn.classList.add('hidden');
+                nextBtn.classList.add('hidden');
+            }
+
+            modal.classList.add('active');
+        }
+
+        // 4. 上一張
+        function prevGalleryImage(event) {
+            event.stopPropagation();
+            currentGalleryIndex = (currentGalleryIndex - 1 + currentGallery.length) % currentGallery.length;
+            showGalleryImage(currentGalleryIndex);
+        }
+
+        // 5. 下一張
+        function nextGalleryImage(event) {
+            event.stopPropagation();
+            currentGalleryIndex = (currentGalleryIndex + 1) % currentGallery.length;
+            showGalleryImage(currentGalleryIndex);
         }
 
         function closeMediaModal() {
@@ -1811,11 +1901,26 @@
             }
         }
     </script>
+    <!-- 🖼️ 升級版：全螢幕檢視器 (支援歷代頭貼畫廊與下載) -->
     <div id="media-modal" onclick="closeMediaModal()">
-        <button id="modal-close-btn">&times;</button>
-        <img id="modal-media-content-img" class="hidden" src="" alt="大圖模式">
-        <video id="modal-media-content-video" class="hidden" src="" controls></video>
-        <audio id="modal-media-content-audio" class="hidden" src="" controls></audio>
+        <button id="modal-close-btn" class="z-50">&times;</button>
+        
+        <!-- 左右切換按鈕 (預設隱藏，只有在歷史頭貼模式才會顯示) -->
+        <button id="modal-prev-btn" onclick="prevGalleryImage(event)" class="hidden absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-black/50 text-white rounded-full flex items-center justify-center hover:bg-black/80 transition-colors z-50 shadow-lg">
+            <i class="fas fa-chevron-left text-xl pr-1"></i>
+        </button>
+        <button id="modal-next-btn" onclick="nextGalleryImage(event)" class="hidden absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-black/50 text-white rounded-full flex items-center justify-center hover:bg-black/80 transition-colors z-50 shadow-lg">
+            <i class="fas fa-chevron-right text-xl pl-1"></i>
+        </button>
+
+        <img id="modal-media-content-img" class="hidden relative z-40 transition-transform duration-300" src="" alt="大圖模式">
+        <video id="modal-media-content-video" class="hidden relative z-40" src="" controls></video>
+        <audio id="modal-media-content-audio" class="hidden relative z-40" src="" controls></audio>
+        
+        <!-- 下載按鈕 -->
+        <a id="modal-download-btn" href="#" target="_blank" onclick="event.stopPropagation()" class="hidden absolute bottom-8 bg-black/60 text-white px-6 py-2 rounded-full hover:bg-white hover:text-black transition-colors z-50 shadow-xl font-medium text-sm flex items-center gap-2">
+            <i class="fas fa-download"></i> 下載圖片
+        </a>
     </div>
     <div id="date-picker-modal" class="hidden fixed inset-0 z-[100] bg-black/40 flex flex-col justify-end transition-opacity">
         <div class="bg-white rounded-t-3xl p-4 pb-8 shadow-2xl w-full max-w-md mx-auto relative transform transition-transform translate-y-0">
