@@ -688,8 +688,21 @@
 
         // 2. 打開聊天室 (支援動態切換資料庫)
         // 2. 打開聊天室 (防崩潰：分批渲染版)
+        // 🌟 記住目前的渲染任務，避免打架當機
+        window.renderTimeoutId = null;
+        window.isFastForwarding = false;
+
+        // 2. 打開聊天室 (防崩潰：分批渲染版)
         function openChat(roomId, title) {
+            // 🛑 煞車系統：如果上一個房間還沒畫完，強制停止它！
+            if (window.renderTimeoutId) {
+                clearTimeout(window.renderTimeoutId);
+                window.renderTimeoutId = null;
+            }
+            window.isFastForwarding = false; // 恢復正常速度
+
             currentMemberId = roomId; 
+            // ... (下面維持原本的 const activeMemberDB...)
             
             const activeMemberDB = (currentGroup === 'sakura') ? MEMBER_DB : NOGI_MEMBER_DB;
             const activeMessagesDB = (currentGroup === 'sakura') ? (window.MESSAGES_DB || {}) : (window.NOGI_MESSAGES_DB || {});
@@ -717,16 +730,21 @@
             // 🌟 核心減肥手術：分段進食法 (Batch Rendering)
             let batchSize = 50; // 每次只處理 150 則
             let currentIndex = 0;
+            
 
             function renderNextBatch() {
                 if (currentIndex >= messages.length) {
                     // 全部渲染完畢才上色
                     applyThemeColors();
+                    window.isFastForwarding = false; // 畫完就關閉加速引擎
                     return;
                 }
 
                 let batchHtml = '';
-                let endIndex = Math.min(currentIndex + batchSize, messages.length);
+                
+                // 🚀 極速引擎：如果收到加速指令，就把剩下的數量全部當作 batchSize！
+                let currentBatchSize = window.isFastForwarding ? messages.length : batchSize;
+                let endIndex = Math.min(currentIndex + currentBatchSize, messages.length);
                 
                 for (let i = currentIndex; i < endIndex; i++) {
                     const msg = messages[i];
@@ -862,15 +880,14 @@
                 // 🌟 變色龍加速：如果是乃木坂，字串階段直接取代 (減輕 DOM 負擔)
                 if (currentGroup === 'nogi') {
                     batchHtml = batchHtml.replaceAll('sakura', 'nogipurple')
-                                         .replaceAll('pink-100', 'purple-200')
-                                         .replaceAll('pink-50', 'purple-50');
+                                         // ...
                 }
 
                 chatContainer.insertAdjacentHTML('beforeend', batchHtml);
                 currentIndex = endIndex;
 
-                // 🌟 讓手機喘息 20 毫秒再畫下一批！
-                setTimeout(renderNextBatch, 20);
+                // 🛑 把原本的 setTimeout 換成有煞車系統的版本！(加速狀態下 0 毫秒立刻繼續)
+                window.renderTimeoutId = setTimeout(renderNextBatch, window.isFastForwarding ? 0 : 20);
             }
 
             // 啟動分批渲染
@@ -1312,7 +1329,10 @@
             const title = document.getElementById('chat-title').innerText;
             openChat(currentMemberId, title);
 
-            // 稍微拉長到 400 毫秒，等畫面完全把幾百則訊息生出來
+            // 🚀 啟動極速渲染引擎！不用慢慢等了！
+            window.isFastForwarding = true;
+
+            // 因為瞬間就畫完了，我們不用等 1500 毫秒，改等 300 毫秒就夠了！
             setTimeout(() => {
                 const chatContainer = document.getElementById('chat-container');
                 if (!chatContainer) return;
