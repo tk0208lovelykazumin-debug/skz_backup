@@ -171,20 +171,19 @@
             overflow: hidden; 
         }
 
-        /* 2. 限制對話泡泡的極限寬度 (螢幕寬度 扣掉 頭像和間距) */
-        .message-item .bg-chatbg,
-        /* 🍏 專屬 iPhone 的瀏海防撞機制 */
-        header {
-            /* 讓標題列上方自動長出跟瀏海一樣高的空間，再加上原本的內距，確保文字絕不被遮擋 */
-            padding-top: max(env(safe-area-inset-top), 20px) !important;
-            min-height: calc(env(safe-area-inset-top) + 50px);
-        }
-        .message-item .bg-white {
+        /* 2. 限制對話泡泡的極限寬度，遇到超長網址強制換行 */
+        .message-item .bg-chatbg {
             max-width: calc(100vw - 4.5rem);
-            /* 遇到超長網址或連續英文，不准撐大泡泡，強制切斷換行！ */
             word-wrap: break-word;
             word-break: break-all;
         }
+
+        /* 🍏 專屬 iPhone 的瀏海防撞機制 (只給標題列用！) */
+        header {
+            padding-top: max(env(safe-area-inset-top), 20px) !important;
+            min-height: calc(env(safe-area-inset-top) + 50px);
+        }
+       
 
         /* 3. 強制所有成員傳的照片、影片，最大只能跟泡泡一樣寬 */
         .message-item img:not(.rounded-full), 
@@ -716,7 +715,7 @@
             document.getElementById('month-nav-buttons').classList.remove('hidden');
 
             // 🌟 核心減肥手術：分段進食法 (Batch Rendering)
-            let batchSize = 150; // 每次只處理 150 則
+            let batchSize = 50; // 每次只處理 150 則
             let currentIndex = 0;
 
             function renderNextBatch() {
@@ -838,7 +837,7 @@
                     }
 
                     batchHtml += `
-                        <div class="flex gap-3 mb-6 ${markerClass}">
+                        <div class="flex gap-3 mb-6 message-item ${markerClass}">
                             <img src="${sender.avatar}" loading="lazy" onclick="viewAvatarGallery('${msg.senderId || currentMemberId}', event)" class="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0 cursor-pointer hover:opacity-80 transition-opacity active:scale-95">
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center justify-between mb-1">
