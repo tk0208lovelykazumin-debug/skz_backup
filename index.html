@@ -700,6 +700,7 @@
                 window.renderTimeoutId = null;
             }
             window.isFastForwarding = false; // 恢復正常速度
+            window.chatMode = 'chat';
 
             currentMemberId = roomId; 
             // ... (下面維持原本的 const activeMemberDB...)
@@ -727,35 +728,35 @@
             chatScreen.classList.replace('slide-in-right', 'active-screen');
             document.getElementById('month-nav-buttons').classList.remove('hidden');
 
-            // 🌟 核心減肥手術：分段進食法 (Batch Rendering)
-            let batchSize = 50; // 每次只處理 150 則
-            let currentIndex = 0;
-            
+            // 🌟 效能版：不要一進聊天室就把整個歷史紀錄塞進 DOM。
+            // 第一次只畫 80 則，之後靠捲動再補 50 則。
+            // 日期跳轉時可用 window.chatInitialIndex 從目標附近開始。
+            const initialIndex = Math.max(0, Number(window.chatInitialIndex) || 0);
+            window.chatInitialIndex = 0;
+            let batchSize = 50;
+            let renderedStart = initialIndex;
+            let renderedEnd = initialIndex;
+            let firstBatch = true;
+            let isRendering = false;
 
-            function renderNextBatch() {
-                if (currentIndex >= messages.length) {
-                    // 全部渲染完畢才上色
-                    applyThemeColors();
-                    window.isFastForwarding = false; // 畫完就關閉加速引擎
-                    return;
-                }
-
+            function buildMessageRange(rangeStart, rangeEnd) {
                 let batchHtml = '';
-                
-                // 🚀 極速引擎：如果收到加速指令，就把剩下的數量全部當作 batchSize！
-                let currentBatchSize = window.isFastForwarding ? messages.length : batchSize;
-                let endIndex = Math.min(currentIndex + currentBatchSize, messages.length);
-                
-                for (let i = currentIndex; i < endIndex; i++) {
+
+                for (let i = rangeStart; i < rangeEnd; i++) {
                     const msg = messages[i];
                     let rYear = msg.year || 2026;
                     let rMonth = msg.time ? msg.time.split('/')[0] : ""; 
                     let monthKey = `${rYear}/${rMonth}`;
                     let markerClass = "";
 
-                    if (window.lastSeenMonth !== monthKey && rMonth !== "") {
-                        markerClass = "month-marker scroll-mt-24"; 
-                        window.lastSeenMonth = monthKey;
+                    // 月份標記直接根據資料判斷，不依賴「上一次渲染到哪裡」。
+                    // 這樣從中間開始渲染、往上補資料時也不會漏掉月份標記。
+                    const prevMsg = i > 0 ? messages[i - 1] : null;
+                    const prevMonthKey = prevMsg && prevMsg.time
+                        ? `${prevMsg.year || 2026}/${String(prevMsg.time).split('/')[0]}`
+                        : null;
+                    if (rMonth !== "" && (i === 0 || monthKey !== prevMonthKey)) {
+                        markerClass = "month-marker scroll-mt-24";
                     }
 
                     const sender = activeMemberDB[msg.senderId] || { name: "System", avatar: "https://placehold.co/150x150" };
@@ -851,11 +852,12 @@
                         
                         // 💡 只有當這則訊息有文字時，才在標籤列加入「翻譯按鈕」
                         const rawTextForTrans = encodeURIComponent(msg.text);
-                        transBtnHtml = `<button onclick="translateText('${textId}', '${rawTextForTrans}', this)" class="text-[10px] text-gray-400 hover:text-sakura transition-colors shrink-0"><i class="fas fa-language"></i> 翻譯</button>`;
+                        const chatAccent = currentGroup === 'nogi' ? 'text-nogipurple hover:text-nogipurple/70' : 'text-sakura hover:text-sakura/70';
+                        transBtnHtml = `<button onclick="translateText('${textId}', '${rawTextForTrans}', this)" class="text-[10px] ${chatAccent} transition-colors shrink-0"><i class="fas fa-language"></i> 翻譯</button>`;
                     }
 
                     batchHtml += `
-                        <div class="flex gap-3 mb-6 message-item ${markerClass}">
+                        <div class="flex gap-3 mb-6 message-item ${markerClass}" data-message-index="${i}">
                             <img src="${sender.avatar}" loading="lazy" onclick="viewAvatarGallery('${msg.senderId || currentMemberId}', event)" class="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0 cursor-pointer hover:opacity-80 transition-opacity active:scale-95">
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center justify-between mb-1">
@@ -883,15 +885,97 @@
                                          // ...
                 }
 
-                chatContainer.insertAdjacentHTML('beforeend', batchHtml);
-                currentIndex = endIndex;
 
-                // 🛑 把原本的 setTimeout 換成有煞車系統的版本！(加速狀態下 0 毫秒立刻繼續)
-                window.renderTimeoutId = setTimeout(renderNextBatch, window.isFastForwarding ? 0 : 20);
+
+                // 🌟 變色龍加速：如果是乃木坂，字串階段直接取代 (減輕 DOM 負擔)
+                if (currentGroup === 'nogi') {
+                    batchHtml = batchHtml.replaceAll('sakura', 'nogipurple');
+                }
+
+                return batchHtml;
             }
 
-            // 啟動分批渲染
+            function renderNextBatch() {
+                if (isRendering || renderedEnd >= messages.length) return;
+                isRendering = true;
+
+                const amount = firstBatch ? 80 : batchSize;
+                const rangeStart = renderedEnd;
+                const rangeEnd = Math.min(rangeStart + amount, messages.length);
+                const batchHtml = buildMessageRange(rangeStart, rangeEnd);
+
+                if (batchHtml) {
+                    chatContainer.insertAdjacentHTML('beforeend', batchHtml);
+                }
+                renderedEnd = rangeEnd;
+                firstBatch = false;
+                isRendering = false;
+                applyThemeColors();
+            }
+
+            function renderPreviousBatch() {
+                if (isRendering || renderedStart <= 0) return;
+                isRendering = true;
+
+                const rangeEnd = renderedStart;
+                const rangeStart = Math.max(0, rangeEnd - batchSize);
+                const batchHtml = buildMessageRange(rangeStart, rangeEnd);
+
+                const oldScrollHeight = chatContainer.scrollHeight;
+                const oldScrollTop = chatContainer.scrollTop;
+                if (batchHtml) {
+                    chatContainer.insertAdjacentHTML('afterbegin', batchHtml);
+                }
+                renderedStart = rangeStart;
+
+                // 前面插入 DOM 後維持使用者原本看到的位置。
+                chatContainer.scrollTop = oldScrollTop + (chatContainer.scrollHeight - oldScrollHeight);
+                isRendering = false;
+                applyThemeColors();
+            }
+
+            window.chatRenderState = {
+                loadMore: () => {
+                    if (!isRendering && renderedEnd < messages.length) renderNextBatch();
+                },
+                loadPrevious: () => {
+                    if (!isRendering && renderedStart > 0) renderPreviousBatch();
+                },
+                get currentIndex() { return renderedEnd; },
+                get startIndex() { return renderedStart; },
+                get total() { return messages.length; },
+                getVisibleIndex: () => {
+                    const items = chatContainer.querySelectorAll('.message-item[data-message-index]');
+                    if (!items.length) return renderedStart;
+                    const containerRect = chatContainer.getBoundingClientRect();
+                    const threshold = containerRect.top + 80;
+                    for (const item of items) {
+                        const rect = item.getBoundingClientRect();
+                        if (rect.bottom >= threshold) return Number(item.dataset.messageIndex);
+                    }
+                    return Number(items[items.length - 1].dataset.messageIndex);
+                }
+            };
+
+            // 啟動第一批渲染
             renderNextBatch();
+        }
+
+        // 聊天室雙向分批載入：接近底部補後面的訊息，接近頂部補前面的訊息。
+        if (!window.chatScrollBound) {
+            chatContainer.addEventListener('scroll', function() {
+                if (window.chatMode === 'search') return;
+                const state = window.chatRenderState;
+                if (!state) return;
+
+                if (chatContainer.scrollTop < 500 && state.loadPrevious) {
+                    state.loadPrevious();
+                }
+                if (chatContainer.scrollTop + chatContainer.clientHeight >= chatContainer.scrollHeight - 700 && state.loadMore) {
+                    state.loadMore();
+                }
+            }, { passive: true });
+            window.chatScrollBound = true;
         }
         // 3. 返回列表頁並執行「記憶體大掃除」
         function goBack() {
@@ -1010,12 +1094,15 @@
             // 💡 修復：動態判斷要從櫻坂還是乃木坂的資料庫拿資料！
             const activeMessagesDB = (currentGroup === 'sakura') ? (window.MESSAGES_DB || {}) : (window.NOGI_MESSAGES_DB || {});
             const msgs = activeMessagesDB[currentMemberId] || [];
-            const targetMsgs = msgs.filter(m => {
+            const allTargetMsgs = msgs.filter(m => {
                 if (tabType === 'image') return m.picture && m.picture !== '';
                 if (tabType === 'video') return m.video && m.video !== '';
                 if (tabType === 'audio') return m.voice && m.voice !== '';
                 return false;
             });
+            // 媒體櫃也不能一次建立幾千個卡片。
+            const mediaLimit = Math.min(allTargetMsgs.length, window._mediaLimit || 120);
+            const targetMsgs = allTargetMsgs.slice(0, mediaLimit);
 
             // 3. 將資料按「真實年份 + 月份」進行完美分組
             const groupedData = {};
@@ -1076,6 +1163,19 @@
                     html += `</div>`;
                     container.insertAdjacentHTML('beforeend', html);
                 });
+
+                if (allTargetMsgs.length > mediaLimit) {
+                    const more = document.createElement('button');
+                    more.className = 'w-full py-3 mt-4 mb-6 rounded-xl bg-gray-50 text-gray-500 text-sm';
+                    more.textContent = `還有 ${allTargetMsgs.length - mediaLimit} 個媒體，點這裡載入全部`;
+                    more.onclick = () => {
+                        const oldLimit = window._mediaLimit || mediaLimit;
+                        window._mediaLimit = Math.min(allTargetMsgs.length, oldLimit + 120);
+                        // 重新進入目前分頁，但每次最多再增加 120 個。
+                        switchMediaTab(tabType);
+                    };
+                    container.appendChild(more);
+                }
 
             // --- 👇 從這裡開始替換 👇 ---
             } else if (tabType === 'audio') {
@@ -1243,9 +1343,50 @@
         // ==========================================
         let currentCalDate = new Date();
 
+        function getCalendarMessages() {
+            const activeMessagesDB = (currentGroup === 'sakura') ? (window.MESSAGES_DB || {}) : (window.NOGI_MESSAGES_DB || {});
+            return activeMessagesDB[currentMemberId] || [];
+        }
+
+        function getAvailableCalendarYears() {
+            const years = new Set();
+            getCalendarMessages().forEach(msg => {
+                const y = Number(msg && msg.year);
+                if (Number.isFinite(y)) years.add(y);
+            });
+            return Array.from(years).sort((a, b) => a - b);
+        }
+
+        function populateCalendarYearSelect(preferredYear) {
+            const select = document.getElementById('calendar-year-select');
+            if (!select) return;
+            const years = getAvailableCalendarYears();
+            select.innerHTML = years.length
+                ? years.map(y => `<option value="${y}">${y} 年</option>`).join('')
+                : `<option value="${preferredYear}">${preferredYear} 年</option>`;
+
+            const wanted = years.includes(Number(preferredYear)) ? Number(preferredYear) : (years[years.length - 1] || Number(preferredYear));
+            select.value = String(wanted);
+            currentCalDate.setFullYear(wanted);
+        }
+
         function openDatePicker() {
             document.getElementById('dropdown-menu').classList.add('hidden');
             document.getElementById('date-picker-modal').classList.remove('hidden');
+
+            const years = getAvailableCalendarYears();
+            if (years.length) {
+                const currentYear = currentCalDate.getFullYear();
+                if (!years.includes(currentYear)) currentCalDate.setFullYear(years[years.length - 1]);
+            }
+            populateCalendarYearSelect(currentCalDate.getFullYear());
+            renderCalendar(currentCalDate.getFullYear(), currentCalDate.getMonth());
+        }
+
+        function changeCalendarYear(year) {
+            const numericYear = Number(year);
+            if (!Number.isFinite(numericYear)) return;
+            currentCalDate.setFullYear(numericYear);
             renderCalendar(currentCalDate.getFullYear(), currentCalDate.getMonth());
         }
 
@@ -1255,6 +1396,8 @@
 
         function changeMonth(offset) {
             currentCalDate.setMonth(currentCalDate.getMonth() + offset);
+            const select = document.getElementById('calendar-year-select');
+            if (select) select.value = String(currentCalDate.getFullYear());
             renderCalendar(currentCalDate.getFullYear(), currentCalDate.getMonth());
         }
 
@@ -1263,7 +1406,9 @@
             const daysContainer = document.getElementById('calendar-days');
             if(!daysContainer) return; 
             daysContainer.innerHTML = '';
-            document.getElementById('calendar-month-year').innerText = `${year} 年 ${month + 1} 月`;
+            document.getElementById('calendar-month-year').innerText = `${month + 1} 月`;
+            const yearSelect = document.getElementById('calendar-year-select');
+            if (yearSelect) yearSelect.value = String(year);
 
             const firstDay = new Date(year, month, 1).getDay();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -1275,9 +1420,9 @@
             
             msgs.forEach(m => {
                 // 🌟 2. 核心：直接比對你 Python 寫入的真實 year！
-                if (m.year === year) {
+                if (Number(m.year) === Number(year) && m.time) {
                     // 把 05/04 轉成 5 跟 4
-                    let parts = m.time.split(/\s+/)[0].split('/');
+                    let parts = String(m.time).split(/\s+/)[0].split('/');
                     let mMonth = parseInt(parts[0], 10);
                     let mDay = parseInt(parts[1], 10);
                     activeDates.add(`${mMonth}-${mDay}`);
@@ -1320,88 +1465,36 @@
         // 🎯 點擊日期後的防彈跳轉魔法 (雙重保險版)
         function selectDate(targetYear, targetMonth, targetDay) {
             closeDatePicker();
-            
+
             const mediaScreen = document.getElementById('media-screen');
             const chatScreen = document.getElementById('chat-screen');
             if (mediaScreen) mediaScreen.classList.add('hidden');
             if (chatScreen) chatScreen.classList.remove('hidden');
 
-            const title = document.getElementById('chat-title').innerText;
-            openChat(currentMemberId, title);
+            const activeMessagesDB = (currentGroup === 'sakura') ? (window.MESSAGES_DB || {}) : (window.NOGI_MESSAGES_DB || {});
+            const msgs = activeMessagesDB[currentMemberId] || [];
 
-            // 🚀 啟動極速渲染引擎！不用慢慢等了！
-            window.isFastForwarding = true;
+            // 直接從資料找到「這一天第一則訊息」的 index。
+            // 年份使用資料裡既有的 msg.year，不改動你原本的年份處理。
+            const targetIndex = msgs.findIndex(msg => {
+                if (!msg || msg.year == null || !msg.time) return false;
+                if (Number(msg.year) !== Number(targetYear)) return false;
+                const datePart = String(msg.time).trim().split(/\s+/)[0];
+                const parts = datePart.split('/');
+                return Number(parts[0]) === Number(targetMonth) && Number(parts[1]) === Number(targetDay);
+            });
 
-            // 因為瞬間就畫完了，我們不用等 1500 毫秒，改等 300 毫秒就夠了！
-            setTimeout(() => {
-                const chatContainer = document.getElementById('chat-container');
-                if (!chatContainer) return;
+            if (targetIndex < 0) {
+                console.warn('找不到指定日期的訊息:', targetYear, targetMonth, targetDay);
+                return;
+            }
 
-                const activeMessagesDB = (currentGroup === 'sakura') ? (window.MESSAGES_DB || {}) : (window.NOGI_MESSAGES_DB || {});
-                const msgs = activeMessagesDB[currentMemberId] || [];
-                
-                let exactTimeStr = null;
-                let targetIndex = -1;
-
-                // 🌟 1. 先從資料庫找出「這一天第一則訊息」的準確時間 (例如 "05/04 13:05")
-                for (let i = 0; i < msgs.length; i++) {
-                    if (msgs[i].year === targetYear) {
-                        let parts = msgs[i].time.split(/\s+/)[0].split('/');
-                        let mMonth = parseInt(parts[0], 10);
-                        let mDay = parseInt(parts[1], 10);
-                        
-                        if (mMonth === targetMonth && mDay === targetDay) {
-                            exactTimeStr = msgs[i].time;
-                            targetIndex = i;
-                            break;
-                        }
-                    }
-                }
-
-                if (!exactTimeStr) return; // 沒找到就提早結束
-
-                // 🌟 2. 雙重保險尋找 DOM 元素
-                let foundItem = null;
-                
-                // 【保險 A】直接抓子元素 (避開 class 名字對不上的問題)
-                const domItems = chatContainer.children;
-                if (targetIndex !== -1 && domItems[targetIndex]) {
-                    foundItem = domItems[targetIndex];
-                }
-
-                // 【保險 B】如果陣列對位跑掉，直接拿時間去畫面上無情開搜！
-                if (!foundItem || !foundItem.innerText.includes(exactTimeStr)) {
-                    const allSpans = chatContainer.querySelectorAll('span');
-                    for (let span of allSpans) {
-                        // 比對畫面上的文字是不是我們要的時間
-                        if (span.innerText.trim() === exactTimeStr) {
-                            // 往上找到包含整則訊息的外層大框框
-                            foundItem = span.closest('.flex') || span.parentElement.parentElement.parentElement;
-                            break;
-                        }
-                    }
-                }
-
-                // 🌟 3. 執行防彈追蹤捲動
-                if (foundItem) {
-                    foundItem.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    
-                    // 連續兩次鎖定，抵抗圖片載入撐開版面的反作用力！
-                    setTimeout(() => foundItem.scrollIntoView({ behavior: 'auto', block: 'start' }), 1500);
-                    setTimeout(() => foundItem.scrollIntoView({ behavior: 'smooth', block: 'start' }), 2000);
-
-                    // 閃爍提示效果
-                    const bubble = foundItem.querySelector('.bg-chatbg') || foundItem.querySelector('div[class*="bg-"]');
-                    if(bubble) {
-                        bubble.classList.add('!bg-sakura/30', 'transition-colors', 'duration-700');
-                        setTimeout(() => bubble.classList.remove('!bg-sakura/30'), 1500);
-                    }
-                }
-            }, 1500);
+            jumpToChatIndex(targetIndex, { highlight: true });
         }
-        window.onload = async () => {
-            await loadCloudDict(); // 等待字典抓完
-            initList();            // 再渲染畫面
+        window.onload = () => {
+            // 首頁不要被 GAS 字典網路請求卡住。
+            initList();
+            loadCloudDict();
         };
         // ==========================================
         // 🌟 新增功能：即時文字搜尋與螢光筆標記
@@ -1422,71 +1515,85 @@
         }
 
         // 監聽輸入框，只要打字就即時過濾！
+        let searchTimer = null;
         document.getElementById('search-input').addEventListener('input', function(e) {
-            const keyword = e.target.value.trim().toLowerCase();
+            clearTimeout(searchTimer);
+            const rawKeyword = e.target.value;
+            searchTimer = setTimeout(() => runSearch(rawKeyword), 180);
+        });
+
+        function runSearch(rawKeyword) {
+            const keyword = rawKeyword.trim().toLowerCase();
             const chatContainer = document.getElementById('chat-container');
-            
-            // 如果輸入框被清空，就恢復原本的所有對話
+            if (!chatContainer) return;
+
+            // 搜尋模式開始前，務必停止原本聊天室的分批渲染。
+            if (window.renderTimeoutId) {
+                clearTimeout(window.renderTimeoutId);
+                window.renderTimeoutId = null;
+            }
+            window.isFastForwarding = false;
+            window.chatInitialIndex = 0;
+            window.chatPendingScrollIndex = null;
+            window.chatRenderState = null;
+            window.chatMode = 'search';
+
+            // 清空目前聊天室，避免「搜尋結果在上面、原本訊息在下面」的混合狀態。
+            chatContainer.innerHTML = '';
+
+            // 如果輸入框被清空，就恢復原本的所有對話。
             if (!keyword) {
+                window.chatMode = 'chat';
                 const title = document.getElementById('chat-title').innerText;
                 openChat(currentMemberId, title);
                 return;
             }
 
-            // 💡 刪除舊的：const msgs = MESSAGES_DB[currentMemberId];
-            // 💡 替換成下面這兩行「變色龍大腦」：
             const activeMessagesDB = (currentGroup === 'sakura') ? (window.MESSAGES_DB || {}) : (window.NOGI_MESSAGES_DB || {});
             const msgs = activeMessagesDB[currentMemberId] || [];
-            
-            const filteredMsgs = msgs.filter(msg => 
-                msg.text && msg.text.toLowerCase().includes(keyword)
+            const allFilteredMsgs = msgs.filter(msg =>
+                msg.text && String(msg.text).toLowerCase().includes(keyword)
             );
+            const filteredMsgs = allFilteredMsgs.slice(0, 120);
 
-            // 如果找不到訊息
             if (filteredMsgs.length === 0) {
                 chatContainer.innerHTML = `<div class="text-center text-gray-400 mt-10 text-sm font-medium">找不到包含「${keyword}」的訊息</div>`;
                 return;
             }
 
-            
-            // --- 👇 從這裡開始替換 👇 ---
             const activeMemberDB = (currentGroup === 'sakura') ? MEMBER_DB : NOGI_MEMBER_DB;
+            const searchAccent = currentGroup === 'nogi' ? 'text-nogipurple' : 'text-sakura';
             let fullHtml = '';
-            
-            filteredMsgs.forEach(msg => {
-                // 💡 修正 1：群聊發送者防呆！優先抓 msg.senderId，沒有才用房間 ID
+            const safeKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(${safeKeyword})(?![^<]*>)`, 'gi');
+
+            filteredMsgs.forEach((msg, resultIndex) => {
+                const originalIndex = msgs.indexOf(msg);
                 const sender = activeMemberDB[msg.senderId] || activeMemberDB[currentMemberId] || { name: 'System', avatar: 'https://placehold.co/150x150' };
 
-                // 1. 替換暱稱
-                let displayContent = msg.text.replaceAll('%%%', userNickname).replaceAll('％％％', userNickname);
-                
-                // 2. 網址轉換魔法
+                let displayContent = String(msg.text)
+                    .replaceAll('%%%', userNickname)
+                    .replaceAll('％％％', userNickname);
+
                 displayContent = displayContent.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-500 underline hover:opacity-80 transition-opacity" onclick="event.stopPropagation()">$1</a>');
-                
-                // 3. 螢光筆標記
-                const safeKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const regex = new RegExp(`(${safeKeyword})(?![^<]*>)`, 'gi');
-                const highlightedContent = displayContent.replace(regex, `<span class="bg-yellow-200 text-yellow-800 rounded px-1">$1</span>`);
-                
+                const highlightedContent = displayContent.replace(regex, '<span class="bg-yellow-200 text-yellow-800 rounded px-1">$1</span>');
+
                 let contentHtml = `<p class="whitespace-pre-wrap leading-relaxed break-all">${highlightedContent}</p>`;
-                
-                // 💡 修正 2：加入翻譯結果的專屬空盒子
-                let textId = 'search-msg-' + Math.random().toString(36).substr(2, 9);
+                const textId = 'search-msg-' + resultIndex + '-' + Math.random().toString(36).substr(2, 7);
                 contentHtml += `<div id="${textId}-trans" class="hidden mt-2 pt-2 border-t border-gray-200 text-sm text-gray-600 font-medium"></div>`;
-                
-                // 💡 修正 3：加入翻譯按鈕
+
                 const rawTextForTrans = encodeURIComponent(msg.text);
-                const transBtnHtml = `<button onclick="translateText('${textId}', '${rawTextForTrans}', this)" class="text-[10px] text-gray-400 hover:text-sakura transition-colors shrink-0"><i class="fas fa-language"></i> 翻譯</button>`;
-                
+                const transBtnHtml = `<button onclick="translateText('${textId}', '${rawTextForTrans}', this)" class="text-[10px] ${searchAccent} hover:opacity-70 transition-colors shrink-0"><i class="fas fa-language"></i> 翻譯</button>`;
+
                 fullHtml += `
-                    <div class="flex items-start gap-3 w-full mb-6 relative message-item" data-type="text">
+                    <div class="flex items-start gap-3 w-full mb-6 relative message-item" data-message-index="${originalIndex}" data-type="text">
                         <img src="${sender.avatar}" class="w-10 h-10 rounded-full object-cover border border-gray-100 flex-shrink-0 shadow-sm z-10" loading="lazy">
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center justify-between mb-1">
                                 <div class="flex items-baseline gap-3">
                                     <span class="text-xs text-gray-700 font-bold">${sender.name}</span>
-                                    <span class="text-[10px] text-gray-500">${msg.time}</span>
-                                    ${transBtnHtml} <!-- 💡 翻譯按鈕出現在這！ -->
+                                    <span class="text-[10px] text-gray-500">${msg.year ? msg.year + '/' : ''}${msg.time || ''}</span>
+                                    ${transBtnHtml}
                                 </div>
                             </div>
                             <div class="bg-chatbg rounded-xl rounded-tl-sm p-3 inline-block shadow-sm max-w-full overflow-hidden">
@@ -1496,11 +1603,14 @@
                     </div>
                 `;
             });
-            
+
             chatContainer.innerHTML = fullHtml;
+            if (allFilteredMsgs.length > filteredMsgs.length) {
+                chatContainer.insertAdjacentHTML('beforeend', `<div class="text-center text-gray-400 text-xs py-6">結果太多，只先顯示前 ${filteredMsgs.length} 筆</div>`);
+            }
             applyThemeColors();
-            // --- 👆 到這裡結束替換 👆 ---
-        });
+        }
+
         // ==========================================
         // 🎬 全螢幕劇院控制功能 (完全獨立，不干擾圖片)
         // ==========================================
@@ -1676,46 +1786,81 @@
         // ==========================================
         // 📅 快速跳月份系統 (防彈跳轉升級版)
         // ==========================================
-        function jumpMonth(direction) {
-            // 抓出所有貼了標籤的「每月第一則訊息」
-            const markers = Array.from(document.querySelectorAll('.month-marker'));
-            if (markers.length === 0) return;
+        function getMonthKeyFromMessage(msg) {
+            if (!msg || !msg.time) return '';
+            return `${Number(msg.year) || 2026}/${String(msg.time).trim().split(/\s+/)[0].split('/')[0]}`;
+        }
 
-            let target = null;
-            
+        function jumpToChatIndex(targetIndex, options = {}) {
+            const activeMessagesDB = (currentGroup === 'sakura') ? (window.MESSAGES_DB || {}) : (window.NOGI_MESSAGES_DB || {});
+            const msgs = activeMessagesDB[currentMemberId] || [];
+            if (!msgs[targetIndex]) return;
+
+            const title = document.getElementById('chat-title').innerText;
+            window.chatInitialIndex = Math.max(0, targetIndex - 40);
+            window.chatPendingScrollIndex = targetIndex;
+            openChat(currentMemberId, title);
+
+            const scrollToTarget = (behavior = 'smooth') => {
+                const container = document.getElementById('chat-container');
+                if (!container) return false;
+                const item = container.querySelector(`[data-message-index="${targetIndex}"]`);
+                if (!item) return false;
+                item.scrollIntoView({ behavior, block: 'start' });
+                if (options.highlight) {
+                    const bubble = item.querySelector('.bg-chatbg');
+                    if (bubble) {
+                        const glowClass = currentGroup === 'nogi' ? '!bg-nogipurple/30' : '!bg-sakura/30';
+                        bubble.classList.add(glowClass, 'transition-colors', 'duration-700');
+                        setTimeout(() => bubble.classList.remove(glowClass), 1500);
+                    }
+                }
+                return true;
+            };
+
+            requestAnimationFrame(() => {
+                if (!scrollToTarget('smooth')) {
+                    setTimeout(() => scrollToTarget('auto'), 80);
+                }
+                setTimeout(() => scrollToTarget('auto'), 500);
+                setTimeout(() => scrollToTarget('auto'), 1200);
+            });
+        }
+
+        // 📅 上一個／下一個月：直接從資料庫找月份，不依賴目前 DOM 裡有沒有該月份。
+        function jumpMonth(direction) {
+            const state = window.chatRenderState;
+            if (!state || window.chatMode === 'search') return;
+
+            const activeMessagesDB = (currentGroup === 'sakura') ? (window.MESSAGES_DB || {}) : (window.NOGI_MESSAGES_DB || {});
+            const msgs = activeMessagesDB[currentMemberId] || [];
+            if (!msgs.length) return;
+
+            let currentIndex = state.getVisibleIndex ? state.getVisibleIndex() : state.startIndex || 0;
+            currentIndex = Math.max(0, Math.min(msgs.length - 1, currentIndex));
+            const currentKey = getMonthKeyFromMessage(msgs[currentIndex]);
+            if (!currentKey) return;
+
+            let targetIndex = -1;
             if (direction === 'up') {
-                for (let i = markers.length - 1; i >= 0; i--) {
-                    if (markers[i].getBoundingClientRect().top < -10) { 
-                        target = markers[i];
+                for (let i = currentIndex - 1; i >= 0; i--) {
+                    if (getMonthKeyFromMessage(msgs[i]) !== currentKey) {
+                        const previousKey = getMonthKeyFromMessage(msgs[i]);
+                        targetIndex = i;
+                        while (targetIndex > 0 && getMonthKeyFromMessage(msgs[targetIndex - 1]) === previousKey) targetIndex--;
                         break;
                     }
                 }
             } else {
-                for (let i = 0; i < markers.length; i++) {
-                    if (markers[i].getBoundingClientRect().top > 150) { 
-                        target = markers[i];
+                for (let i = currentIndex + 1; i < msgs.length; i++) {
+                    if (getMonthKeyFromMessage(msgs[i]) !== currentKey) {
+                        targetIndex = i;
                         break;
                     }
                 }
             }
 
-            if (target) {
-                // 💡 升級 1：先用 auto 瞬間瞬移過去，躲開所有還沒載入的圖片陷阱！
-                target.scrollIntoView({ behavior: 'auto', block: 'start' });
-                
-                // 💡 升級 2：等 0.3 秒，附近的圖片載入完畢後，再平滑地「精準校正」一次！
-                setTimeout(() => {
-                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    
-                    // 順便加上變色龍發光特效，讓你知道跳到哪一則了
-                    const bubble = target.querySelector('.bg-chatbg') || target.querySelector('div[class*="bg-"]');
-                    if(bubble) {
-                        const glowClass = (currentGroup === 'sakura') ? '!bg-sakura/30' : '!bg-nogipurple/30';
-                        bubble.classList.add(glowClass, 'transition-colors', 'duration-700');
-                        setTimeout(() => bubble.classList.remove(glowClass), 1500);
-                    }
-                }, 300);
-            }
+            if (targetIndex >= 0) jumpToChatIndex(targetIndex, { highlight: true });
         }
 
         // 點擊進度條跳轉功能
@@ -1767,7 +1912,8 @@
                 document.getElementById('search-bar-container'),// 搜尋列
                 document.getElementById('media-screen'),       // 媒體庫
                 document.getElementById('date-picker-modal'),  // 日曆
-                document.getElementById('audio-player-ui')     // 語音播放器
+                document.getElementById('audio-player-ui'),    // 語音播放器
+                document.getElementById('dict-modal')            // 新增翻譯字典視窗
             ];
             
             screens.forEach(container => {
@@ -1877,6 +2023,7 @@
         function openDictModal() {
             document.getElementById('dropdown-menu').classList.add('hidden'); // 先把右上角選單收起來
             document.getElementById('dict-modal').classList.remove('hidden');
+            applyThemeColors();
         }
 
         function closeDictModal() {
@@ -1949,7 +2096,7 @@
                     <button onclick="changeMonth(-1)" class="p-2 hover:bg-gray-100 rounded-full w-10 h-10 flex justify-center items-center transition-colors">
                         <i class="fas fa-chevron-left text-sakura text-xl"></i>
                     </button>
-                    <span id="calendar-month-year" class="font-medium text-[15px] tracking-widest w-28 text-center">2026 年 5 月</span>
+                    <div class="flex items-center gap-2"><select id="calendar-year-select" onchange="changeCalendarYear(this.value)" class="font-medium text-[15px] tracking-widest bg-transparent border-0 outline-none appearance-none cursor-pointer text-center"></select><span id="calendar-month-year" class="font-medium text-[15px] tracking-widest w-12 text-center">5 月</span></div>
                     <button onclick="changeMonth(1)" class="p-2 hover:bg-gray-100 rounded-full w-10 h-10 flex justify-center items-center transition-colors">
                         <i class="fas fa-chevron-right text-sakura text-xl"></i>
                     </button>
