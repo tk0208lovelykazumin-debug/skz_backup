@@ -632,7 +632,9 @@
             }
             
             // 重新生出對應團體的九宮格！
-            initList(); 
+            initList();
+            // initList 會重新產生「設定暱稱」等動態 UI，立即套用目前團體主題。
+            applyThemeColors();
         }
         // 點擊旁邊空白處，自動收起團體選單
         document.addEventListener('click', function(event) {
@@ -1053,17 +1055,6 @@
             document.getElementById('chat-screen').classList.remove('hidden');
             // 重置語音播放器
             document.getElementById('audio-player-ui').classList.add('hidden');
-        }
-
-        // 取得月份字串 (將 5/29 轉成 2026 年 5 月)
-        function getMonthKey(timeStr) {
-            if(!timeStr) return "未知月份";
-            let parts = timeStr.split(' ')[0].split('/'); // 抓出 5/29
-            if(parts.length >= 2) {
-                // 假設當前年份為 2026
-                return `2026 年 ${parts[0]} 月`;
-            }
-            return "未知月份";
         }
 
         // 切換分頁邏輯
@@ -1801,12 +1792,46 @@
             window.chatPendingScrollIndex = targetIndex;
             openChat(currentMemberId, title);
 
+            const direction = options.direction || 'down';
+
+            const getItem = (index) => {
+                const container = document.getElementById('chat-container');
+                if (!container) return null;
+                return container.querySelector(`[data-message-index="${index}"]`);
+            };
+
             const scrollToTarget = (behavior = 'smooth') => {
                 const container = document.getElementById('chat-container');
                 if (!container) return false;
-                const item = container.querySelector(`[data-message-index="${targetIndex}"]`);
+                const item = getItem(targetIndex);
                 if (!item) return false;
-                item.scrollIntoView({ behavior, block: 'start' });
+
+                // 上一個月：先把視窗放在目標的「下面」，再向上滑到目標。
+                // 下一個月：先把視窗放在目標的「上面」，再向下滑到目標。
+                if (behavior === 'smooth') {
+                    if (direction === 'up') {
+                        const anchor = getItem(Math.min(targetIndex + 18, msgs.length - 1));
+                        if (anchor) {
+                            container.scrollTop = Math.max(0, anchor.offsetTop - 20);
+                        } else {
+                            container.scrollTop = Math.max(0, item.offsetTop);
+                        }
+                    } else {
+                        const anchor = getItem(Math.max(targetIndex - 18, 0));
+                        if (anchor) {
+                            container.scrollTop = Math.max(0, anchor.offsetTop - 20);
+                        } else {
+                            container.scrollTop = Math.max(0, item.offsetTop - 20);
+                        }
+                    }
+
+                    requestAnimationFrame(() => {
+                        item.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    });
+                } else {
+                    item.scrollIntoView({ behavior: 'auto', block: 'start' });
+                }
+
                 if (options.highlight) {
                     const bubble = item.querySelector('.bg-chatbg');
                     if (bubble) {
@@ -1822,8 +1847,9 @@
                 if (!scrollToTarget('smooth')) {
                     setTimeout(() => scrollToTarget('auto'), 80);
                 }
-                setTimeout(() => scrollToTarget('auto'), 500);
-                setTimeout(() => scrollToTarget('auto'), 1200);
+                // 圖片等資源載入造成高度變化時，最後只做定位校正，不再重播反方向動畫。
+                setTimeout(() => scrollToTarget('auto'), 700);
+                setTimeout(() => scrollToTarget('auto'), 1400);
             });
         }
 
@@ -1860,7 +1886,12 @@
                 }
             }
 
-            if (targetIndex >= 0) jumpToChatIndex(targetIndex, { highlight: true });
+            if (targetIndex >= 0) {
+                jumpToChatIndex(targetIndex, {
+                    highlight: true,
+                    direction
+                });
+            }
         }
 
         // 點擊進度條跳轉功能
@@ -1902,6 +1933,7 @@
         }
         // ==========================================
         // 🎨 變色龍主題系統 (內頁白底粉字 / 白底紫字 自動切換)
+        // 第三刀：把動態暱稱視窗也納入，避免乃木坂漏粉。
         // ==========================================
         function applyThemeColors() {
             // 💡 精準掃描！避開裝了幾萬則訊息的 chat-container，只掃描外層的 UI 介面
@@ -1913,7 +1945,8 @@
                 document.getElementById('media-screen'),       // 媒體庫
                 document.getElementById('date-picker-modal'),  // 日曆
                 document.getElementById('audio-player-ui'),    // 語音播放器
-                document.getElementById('dict-modal')            // 新增翻譯字典視窗
+                document.getElementById('dict-modal'),         // 新增翻譯字典視窗
+                document.getElementById('nickname-modal')      // 設定暱稱視窗
             ];
             
             screens.forEach(container => {
@@ -1931,6 +1964,10 @@
                         cls = cls.replaceAll('sakura', 'nogipurple')
                                  .replaceAll('pink-100', 'purple-200')
                                  .replaceAll('pink-50', 'purple-50')
+                                 .replaceAll('pink-300', 'purple-300')
+                                 .replaceAll('pink-400', 'purple-400')
+                                 .replaceAll('pink-500', 'nogipurple')
+                                 .replaceAll('pink-600', 'purple-600')
                                  .replaceAll('bg-purple-500', 'bg-nogipurple')
                                  .replaceAll('text-purple-600', 'text-nogipurple')
                                  .replaceAll('text-purple-500', 'text-nogipurple');
@@ -1938,7 +1975,10 @@
                         // 🌸 轉換回櫻坂粉模式 (白底粉字)
                         cls = cls.replaceAll('nogipurple', 'sakura')
                                  .replaceAll('purple-200', 'pink-100')
-                                 .replaceAll('purple-50', 'pink-50');
+                                 .replaceAll('purple-50', 'pink-50')
+                                 .replaceAll('purple-300', 'pink-300')
+                                 .replaceAll('purple-400', 'pink-400')
+                                 .replaceAll('purple-600', 'pink-600');
                     }
                     el.setAttribute('class', cls);
                 });
@@ -2119,10 +2159,10 @@
         <div class="bg-white p-6 rounded-2xl w-80 shadow-2xl transform transition-all">
             <h3 class="text-base font-bold text-gray-800 mb-2">設定暱稱</h3>
             <input type="text" id="nickname-input" placeholder="請輸入暱稱 (預設: OO)" 
-                class="w-full border border-gray-200 rounded-xl p-3 mb-4 focus:outline-none focus:border-pink-400 focus:ring-1 focus:ring-pink-400 text-sm">
+                class="w-full border border-gray-200 rounded-xl p-3 mb-4 focus:outline-none focus:border-sakura focus:ring-1 focus:ring-sakura text-sm">
             <div class="flex justify-end gap-2 text-sm font-medium">
                 <button onclick="closeNicknameModal()" class="px-4 py-2 text-gray-400 hover:bg-gray-50 rounded-xl transition-colors">取消</button>
-                <button onclick="saveNickname()" class="px-4 py-2 bg-pink-500 text-white rounded-xl hover:bg-pink-600 transition-colors shadow-sm">儲存設定</button>
+                <button onclick="saveNickname()" class="px-4 py-2 bg-sakura text-white rounded-xl hover:bg-sakura/90 transition-colors shadow-sm">儲存設定</button>
             </div>
         </div>
     </div>
